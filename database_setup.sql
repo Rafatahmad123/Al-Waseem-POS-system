@@ -1,5 +1,5 @@
 -- ============================================
--- POS System Database Setup Script
+-- Al-Kholoud Market & Coffee Roastery POS System Database Setup Script
 -- ============================================
 -- This script creates the necessary tables and functions
 -- for the POS system from scratch
@@ -23,6 +23,7 @@ CREATE TABLE public.products (
     selling_price_dollar NUMERIC(20, 2) DEFAULT 0,
     selling_price_lira NUMERIC(20, 2) DEFAULT 0,
     description TEXT,
+    expiry_date DATE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     is_active BOOLEAN DEFAULT TRUE
 );

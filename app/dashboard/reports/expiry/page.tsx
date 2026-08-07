@@ -5,9 +5,14 @@ import Link from 'next/link'
 export default async function ExpiryReportPage() {
   const expiringProducts = await getExpiringProducts()
 
+  console.log('[EXPIRY PAGE] Total expiring products received:', expiringProducts.length)
+  console.log('[EXPIRY PAGE] Sample products:', expiringProducts.slice(0, 3))
+
   const expired = expiringProducts.filter(p => p.expiry_status === 'expired')
   const critical = expiringProducts.filter(p => p.expiry_status === 'critical')
   const warning = expiringProducts.filter(p => p.expiry_status === 'warning')
+
+  console.log('[EXPIRY PAGE] Categorized - Expired:', expired.length, 'Critical:', critical.length, 'Warning:', warning.length)
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -92,16 +97,22 @@ export default async function ExpiryReportPage() {
       {/* Detailed Table */}
       <div className="bg-white rounded-lg shadow border border-slate-200">
         <div className="p-6 border-b border-slate-200">
-          <div className="flex items-center gap-2">
-            <Filter className="h-5 w-5 text-blue-600" />
-            <h3 className="text-lg font-semibold text-slate-900">جميع المنتجات القريبة من الانتهاء</h3>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Filter className="h-5 w-5 text-blue-600" />
+              <h3 className="text-lg font-semibold text-slate-900">جميع المنتجات القريبة من الانتهاء</h3>
+            </div>
+            <div className="text-sm text-slate-500">
+              المجموع: {expiringProducts.length} منتج
+            </div>
           </div>
         </div>
 
         {expiringProducts.length === 0 ? (
           <div className="p-12 text-center">
             <Package className="h-12 w-12 text-slate-400 mx-auto mb-4" />
-            <p className="text-slate-600">لا توجد منتجات تنتهي صلاحيتها قريباً</p>
+            <p className="text-slate-600 mb-2">لا توجد منتجات تنتهي صلاحيتها قريباً</p>
+            <p className="text-sm text-slate-500">تأكد من إضافة تواريخ الصلاحية للمنتجات في صفحة إدارة المنتجات</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -130,7 +141,7 @@ export default async function ExpiryReportPage() {
               </thead>
               <tbody className="bg-white divide-y divide-slate-200">
                 {expiringProducts.map((product) => (
-                  <tr key={`${product.id}-${product.expiry_date}`} className="hover:bg-slate-50">
+                  <tr key={product.id} className="hover:bg-slate-50">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm font-medium text-slate-900">{product.name}</div>
                     </td>
@@ -138,10 +149,10 @@ export default async function ExpiryReportPage() {
                       {product.barcode}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-900">
-                      {product.batch_quantity}
+                      {product.current_stock}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-900">
-                      {new Date(product.expiry_date).toLocaleDateString('ar-SY')}
+                      {product.expiry_date ? new Date(product.expiry_date).toLocaleDateString('ar-SY') : 'N/A'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <span className={product.days_until_expiry <= 0 ? 'text-red-600' : 'text-slate-900'}>

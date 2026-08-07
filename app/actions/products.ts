@@ -123,6 +123,9 @@ export async function createProduct(formData: FormData) {
     const current_stock = parseInt(formData.get('current_stock') as string)
     const min_stock_level = parseInt(formData.get('min_stock_level') as string)
     const is_active = formData.get('is_active') === 'true'
+    
+    // استقبال تاريخ الصلاحية من النموذج
+    const expiry_date = formData.get('expiry_date') as string
 
     if (!barcode || !name) return { error: 'Barcode and Name are required' }
 
@@ -175,6 +178,8 @@ export async function createProduct(formData: FormData) {
       current_stock: finalStock,
       min_stock_level: finalMinStock,
       is_active,
+      // إضافة تاريخ الصلاحية مع التحقق من عدم فراغه
+      expiry_date: expiry_date && expiry_date.trim() !== '' ? expiry_date : null,
     }
 
     // Insert product with initial stock of 0 to allow atomic logging
@@ -219,6 +224,9 @@ export async function updateProduct(formData: FormData) {
     const current_stock = parseInt(formData.get('current_stock') as string)
     const min_stock_level = parseInt(formData.get('min_stock_level') as string)
     const is_active = formData.get('is_active') === 'true'
+    
+    // استقبال تاريخ الصلاحية عند التعديل
+    const expiry_date = formData.get('expiry_date') as string
 
     if (!id) return { error: 'Product ID is required' }
 
@@ -288,6 +296,8 @@ export async function updateProduct(formData: FormData) {
       selling_price_syp: finalSellingPriceSYP,
       min_stock_level: finalMinStock,
       is_active,
+      // تحديث تاريخ الصلاحية في قاعدة البيانات
+      expiry_date: expiry_date && expiry_date.trim() !== '' ? expiry_date : null,
     }
 
     const { error: updateError } = await supabase
@@ -322,12 +332,11 @@ export async function updateProduct(formData: FormData) {
   }
 }
 
-// التعديل الأهم: الحذف الناعم (Soft Delete)
 export async function deleteProduct(id: string) {
   try {
     const { error } = await supabase
       .from('products')
-      .update({ is_active: false }) // لن نحذف الصف، فقط سنعطله
+      .update({ is_active: false })
       .eq('id', id)
 
     if (error) return { error: error.message }

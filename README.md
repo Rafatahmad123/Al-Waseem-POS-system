@@ -1,4 +1,4 @@
-# Al-Waseem POS System
+# Al-Kholoud Market & Coffee Roastery POS System
 
 A modern Point of Sale (POS) and inventory management system built with Next.js 16, Supabase, and TypeScript. Features dual-currency support (USD/SYP), FIFO stock management, and comprehensive analytics.
 
@@ -35,7 +35,7 @@ A modern Point of Sale (POS) and inventory management system built with Next.js 
 
 ```bash
 git clone <your-repository-url>
-cd al-waseem-pos
+cd alkholoud-market-pos
 ```
 
 ### 2. Install Dependencies
@@ -154,7 +154,7 @@ After deployment, test your application by:
 ## Project Structure
 
 ```
-al-waseem-pos/
+alkholoud-market-pos/
 ├── app/
 │   ├── (dashboard)/          # Protected dashboard routes
 │   │   ├── page.tsx         # Dashboard with analytics
@@ -249,7 +249,7 @@ al-waseem-pos/
 
 ## License
 
-This project is proprietary software for Al-Waseem.
+This project is proprietary software for Al-Kholoud Market & Coffee Roastery.
 
 ## Support
 

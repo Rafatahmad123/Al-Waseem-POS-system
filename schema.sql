@@ -127,7 +127,7 @@ CREATE TABLE settings (
 INSERT INTO settings (key, value, description) VALUES
   ('exchange_rate', '12500', 'Exchange rate from USD to SYP'),
   ('pricing_mode', 'USD', 'Default pricing mode: USD or SYP'),
-  ('company_name', 'Al-Waseem POS', 'Company name for receipts and invoices'),
+  ('company_name', 'ماركت ومحمصة الخلود', 'Company name for receipts and invoices'),
   ('tax_rate', '0', 'Tax rate percentage');
 
 -- Add CHECK constraint for pricing_mode in settings

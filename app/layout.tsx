@@ -10,8 +10,8 @@ const tajawal = Tajawal({
 });
 
 export const metadata: Metadata = {
-  title: "شركة عيال منصور",
-  description: "نظام إدارة الموارد المتكامل - شركة عيال منصور",
+  title: "ماركت ومحمصة الخلود",
+  description: "نظام إدارة الموارد المتكامل - ماركت ومحمصة الخلود",
 };
 
 export default function RootLayout({

@@ -1,7 +1,7 @@
 -- RPC function for atomic debt payment recording with logging
 CREATE OR REPLACE FUNCTION record_debt_payment_with_log(
   p_debt_id UUID,
-  p_payment_amount DECIMAL,
+  p_payment_amount NUMERIC(20, 2),
   p_notes TEXT DEFAULT NULL
 )
 RETURNS JSON AS $$
@@ -28,7 +28,8 @@ BEGIN
   END IF;
 
   -- Calculate new paid amount
-  v_new_paid_amount := v_old_paid_amount + p_payment_amount;
+  -- Cast payment_amount to DECIMAL(10,2) to match debt table precision
+  v_new_paid_amount := v_old_paid_amount + CAST(p_payment_amount AS DECIMAL(10, 2));
 
   -- Validate that payment doesn't exceed total
   IF v_new_paid_amount > v_total_amount THEN
@@ -55,7 +56,7 @@ BEGIN
     p_debt_id,
     v_old_paid_amount,
     v_new_paid_amount,
-    p_payment_amount,
+    CAST(p_payment_amount AS DECIMAL(10, 2)),
     p_notes
   );
 

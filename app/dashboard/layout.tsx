@@ -80,7 +80,7 @@ export default function DashboardLayout({
                 <Menu className="h-6 w-6" />
               </button>
               <Link href="/dashboard" className="text-white font-bold text-xl">
-                شركة عيال منصور
+                ماركت ومحمصة الخلود
               </Link>
             </div>
           </div>
@@ -106,7 +106,7 @@ export default function DashboardLayout({
           <div className="p-6 border-b border-indigo-800">
             <div className="flex items-center justify-between">
               <Link href="/dashboard" className="text-white font-bold text-2xl">
-                شركة عيال منصور
+                ماركت ومحمصة الخلود
               </Link>
               <button
                 onClick={() => setIsSidebarOpen(false)}

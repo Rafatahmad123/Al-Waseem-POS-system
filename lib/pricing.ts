@@ -92,6 +92,19 @@ export function formatCurrency(amount: number, currency: 'USD' | 'SYP' = 'USD'):
     : `${roundedAmount.toFixed(0)} SYP` // اليرة السورية غالباً لا تحتاج لكسور
 }
 
+/**
+ * Format amount in both USD and SYP for display
+ * @param amountUSD - Amount in USD
+ * @param exchangeRate - Current exchange rate
+ * @returns Formatted string like "$124.20 (1,552,500 SYP)"
+ */
+export function formatDualCurrency(amountUSD: number, exchangeRate: number): string {
+  const amountSYP = usdToSyp(amountUSD, exchangeRate)
+  const formattedUSD = formatCurrency(amountUSD, 'USD')
+  const formattedSYP = formatCurrency(amountSYP, 'SYP')
+  return `${formattedUSD} (${formattedSYP})`
+}
+
 export function getPriceInMode(priceUSD: number, priceSYP: number, targetMode: 'USD' | 'SYP'): number {
   return targetMode === 'USD' ? priceUSD : priceSYP
 }

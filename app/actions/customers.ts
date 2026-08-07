@@ -122,7 +122,19 @@ export async function getCustomerLedger(customerId: string) {
         sales (
           id,
           sale_date,
-          total_amount
+          total_amount,
+          sale_items (
+            id,
+            quantity,
+            selling_price_usd,
+            selling_price_syp,
+            total_price,
+            products (
+              id,
+              name,
+              barcode
+            )
+          )
         )
       `)
       .eq('customer_id', customerId)

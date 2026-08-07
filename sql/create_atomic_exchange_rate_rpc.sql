@@ -4,7 +4,7 @@
 -- This function guarantees a single atomic operation to prevent cardinality violations
 -- ============================================================================
 
-CREATE OR REPLACE FUNCTION execute_atomic_exchange_rate_update(p_new_rate NUMERIC)
+CREATE OR REPLACE FUNCTION execute_atomic_exchange_rate_update(p_new_rate NUMERIC(20, 2))
 RETURNS VOID
 LANGUAGE plpgsql
 SECURITY DEFINER

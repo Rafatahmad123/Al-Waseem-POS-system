@@ -1,31 +1,58 @@
 'use client'
 
-import { useState } from 'react'
-import { ArrowLeft, TrendingUp, TrendingDown, Minus, Filter, Package } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { ArrowLeft, TrendingUp, TrendingDown, Minus, Filter, Package, RefreshCw } from 'lucide-react'
 import Link from 'next/link'
 import { getProductTurnover } from '@/app/actions/analytics'
 
+interface TurnoverProduct {
+  product_id: string
+  product_name: string
+  barcode: string
+  category: string
+  current_stock: number
+  total_sold: number
+  turnover_rate: number
+  movement_speed: 'Fast' | 'Normal' | 'Slow'
+}
+
 export default function TurnoverReportPage() {
   const [days, setDays] = useState(30)
-  const [turnoverData, setTurnoverData] = useState<any[]>([])
-  const [loading, setLoading] = useState(false)
+  const [turnoverData, setTurnoverData] = useState<TurnoverProduct[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   const fetchTurnoverData = async (period: number) => {
     setLoading(true)
-    const data = await getProductTurnover(period)
-    setTurnoverData(data)
-    setLoading(false)
+    setError(null)
+    try {
+      console.log('[TURNOVER PAGE] Fetching data for period:', period)
+      const data = await getProductTurnover(period)
+      console.log('[TURNOVER PAGE] Received data:', data.length, 'products')
+      setTurnoverData(data)
+    } catch (error) {
+      console.error('[TURNOVER PAGE] Error fetching turnover data:', error)
+      setError('فشل في تحميل بيانات دوران المخزون')
+      setTurnoverData([])
+    } finally {
+      setLoading(false)
+    }
   }
 
   const handlePeriodChange = (period: number) => {
+    if (period === days) return // Don't refetch if same period
     setDays(period)
     fetchTurnoverData(period)
   }
 
-  // Fetch initial data
-  useState(() => {
+  const handleRefresh = () => {
+    fetchTurnoverData(days)
+  }
+
+  // Fetch initial data using useEffect (correct pattern)
+  useEffect(() => {
     fetchTurnoverData(30)
-  })
+  }, []) // Empty dependency array = run once on mount
 
   const getSpeedColor = (speed: string) => {
     switch (speed) {
@@ -66,6 +93,7 @@ export default function TurnoverReportPage() {
     }
   }
 
+  // Calculate counts for each category
   const fastCount = turnoverData.filter(p => p.movement_speed === 'Fast').length
   const normalCount = turnoverData.filter(p => p.movement_speed === 'Normal').length
   const slowCount = turnoverData.filter(p => p.movement_speed === 'Slow').length
@@ -87,24 +115,35 @@ export default function TurnoverReportPage() {
 
       {/* Period Filter */}
       <div className="bg-white rounded-lg shadow border border-slate-200 p-6">
-        <div className="flex items-center gap-3">
-          <Filter className="h-5 w-5 text-blue-600" />
-          <span className="text-sm font-medium text-slate-700">فترة التحليل:</span>
-          <div className="flex gap-2">
-            {[7, 30, 90].map((period) => (
-              <button
-                key={period}
-                onClick={() => handlePeriodChange(period)}
-                className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                  days === period
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                }`}
-              >
-                آخر {period} يوم
-              </button>
-            ))}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Filter className="h-5 w-5 text-blue-600" />
+            <span className="text-sm font-medium text-slate-700">فترة التحليل:</span>
+            <div className="flex gap-2">
+              {[7, 30, 90].map((period) => (
+                <button
+                  key={period}
+                  onClick={() => handlePeriodChange(period)}
+                  disabled={loading}
+                  className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                    days === period
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  } disabled:opacity-50 disabled:cursor-not-allowed`}
+                >
+                  آخر {period} يوم
+                </button>
+              ))}
+            </div>
           </div>
+          <button
+            onClick={handleRefresh}
+            disabled={loading}
+            className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+            تحديث
+          </button>
         </div>
       </div>
 
@@ -150,22 +189,42 @@ export default function TurnoverReportPage() {
       {/* Turnover Table */}
       <div className="bg-white rounded-lg shadow border border-slate-200">
         <div className="p-6 border-b border-slate-200">
-          <div className="flex items-center gap-2">
-            <Package className="h-5 w-5 text-blue-600" />
-            <h3 className="text-lg font-semibold text-slate-900">
-              تفاصيل دوران المخزون (آخر {days} يوم)
-            </h3>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Package className="h-5 w-5 text-blue-600" />
+              <h3 className="text-lg font-semibold text-slate-900">
+                تفاصيل دوران المخزون (آخر {days} يوم)
+              </h3>
+            </div>
+            <div className="text-sm text-slate-500">
+              المجموع: {turnoverData.length} منتج
+            </div>
           </div>
         </div>
 
         {loading ? (
           <div className="p-12 text-center">
+            <RefreshCw className="h-8 w-8 text-blue-600 mx-auto mb-4 animate-spin" />
             <p className="text-slate-600">جاري تحميل البيانات...</p>
+          </div>
+        ) : error ? (
+          <div className="p-12 text-center">
+            <Package className="h-12 w-12 text-red-400 mx-auto mb-4" />
+            <p className="text-red-600 mb-2">{error}</p>
+            <button
+              onClick={handleRefresh}
+              className="text-blue-600 hover:text-blue-800 underline"
+            >
+              إعادة المحاولة
+            </button>
           </div>
         ) : turnoverData.length === 0 ? (
           <div className="p-12 text-center">
             <Package className="h-12 w-12 text-slate-400 mx-auto mb-4" />
-            <p className="text-slate-600">لا توجد بيانات دوران المخزون</p>
+            <p className="text-slate-600 mb-2">لا توجد بيانات دوران المخزون</p>
+            <p className="text-sm text-slate-500">
+              قد لا تكون هناك مبيعات خلال الفترة المحددة، أو لا توجد منتجات نشطة
+            </p>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -213,11 +272,11 @@ export default function TurnoverReportPage() {
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-900">
                       {product.total_sold}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-900">
-                      {product.turnover_rate}x
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-900">
+                      {product.turnover_rate.toFixed(1)}%
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full border ${getSpeedColor(product.movement_speed)}`}>
+                      <span className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full ${getSpeedColor(product.movement_speed)}`}>
                         {getSpeedIcon(product.movement_speed)}
                         {getSpeedText(product.movement_speed)}
                       </span>
@@ -233,24 +292,24 @@ export default function TurnoverReportPage() {
       {/* Recommendations */}
       {turnoverData.length > 0 && (
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
-          <h3 className="text-lg font-semibold text-blue-900 mb-3">توصيات إعادة التخزين</h3>
+          <h3 className="text-lg font-semibold text-blue-900 mb-3">توصيات إدارة المخزون</h3>
           <ul className="space-y-2 text-sm text-blue-800">
             {fastCount > 0 && (
               <li className="flex items-start gap-2">
-                <span className="font-bold text-green-600">•</span>
-                <span>فكر في زيادة المخزون للمنتجات السريعة الحركة ({fastCount} منتج) لتجنب نفاد المخزون</span>
-              </li>
-            )}
-            {slowCount > 0 && (
-              <li className="flex items-start gap-2">
-                <span className="font-bold text-red-600">•</span>
-                <span>قلل المخزون أو قدم خصومات للمنتجات البطيئة الحركة ({slowCount} منتج) لتقليل تكاليف التخزين</span>
+                <span className="font-bold">•</span>
+                <span>فكر في زيادة مخزون {fastCount} منتج سريع الحركة لتلبية الطلب المستمر</span>
               </li>
             )}
             {normalCount > 0 && (
               <li className="flex items-start gap-2">
-                <span className="font-bold text-blue-600">•</span>
-                <span>حافظ على مستويات المخزون الحالية للمنتجات العادية الحركة ({normalCount} منتج)</span>
+                <span className="font-bold">•</span>
+                <span>راقب {normalCount} منتج عادي الحركة واضبط مستويات المخزون حسب الطلب</span>
+              </li>
+            )}
+            {slowCount > 0 && (
+              <li className="flex items-start gap-2">
+                <span className="font-bold">•</span>
+                <span>فكر في تقديم خصومات أو ترويجات لـ {slowCount} منتج بطيء الحركة لتسريع الدوران</span>
               </li>
             )}
           </ul>

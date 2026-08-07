@@ -45,6 +45,7 @@ export interface Database {
           selling_price_syp: number
           current_stock: number
           min_stock_level: number
+          expiry_date: string | null
           is_active: boolean
           created_at: string
           updated_at: string
@@ -61,6 +62,7 @@ export interface Database {
           selling_price_syp?: number
           current_stock?: number
           min_stock_level?: number
+          expiry_date?: string | null
           is_active?: boolean
           created_at?: string
           updated_at?: string
@@ -77,6 +79,7 @@ export interface Database {
           selling_price_syp?: number
           current_stock?: number
           min_stock_level?: number
+          expiry_date?: string | null
           is_active?: boolean
           created_at?: string
           updated_at?: string
