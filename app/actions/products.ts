@@ -120,8 +120,9 @@ export async function createProduct(formData: FormData) {
     const cost_price = parseFloat(formData.get('cost_price') as string)
     const selling_price_usd = parseFloat(formData.get('selling_price_usd') as string)
     const selling_price_syp = parseFloat(formData.get('selling_price_syp') as string)
-    const current_stock = parseInt(formData.get('current_stock') as string)
+    const current_stock = parseFloat(formData.get('current_stock') as string)
     const min_stock_level = parseInt(formData.get('min_stock_level') as string)
+    const is_bulk = formData.get('is_bulk') === 'true'
     const is_active = formData.get('is_active') === 'true'
     
     // استقبال تاريخ الصلاحية من النموذج
@@ -177,6 +178,7 @@ export async function createProduct(formData: FormData) {
       selling_price_syp: finalSellingPriceSYP,
       current_stock: finalStock,
       min_stock_level: finalMinStock,
+      is_bulk,
       is_active,
       // إضافة تاريخ الصلاحية مع التحقق من عدم فراغه
       expiry_date: expiry_date && expiry_date.trim() !== '' ? expiry_date : null,
@@ -221,8 +223,9 @@ export async function updateProduct(formData: FormData) {
     const cost_price = parseFloat(formData.get('cost_price') as string)
     const selling_price_usd = parseFloat(formData.get('selling_price_usd') as string)
     const selling_price_syp = parseFloat(formData.get('selling_price_syp') as string)
-    const current_stock = parseInt(formData.get('current_stock') as string)
+    const current_stock = parseFloat(formData.get('current_stock') as string)
     const min_stock_level = parseInt(formData.get('min_stock_level') as string)
+    const is_bulk = formData.get('is_bulk') === 'true'
     const is_active = formData.get('is_active') === 'true'
     
     // استقبال تاريخ الصلاحية عند التعديل
@@ -295,6 +298,7 @@ export async function updateProduct(formData: FormData) {
       selling_price_usd: finalSellingPriceUSD,
       selling_price_syp: finalSellingPriceSYP,
       min_stock_level: finalMinStock,
+      is_bulk,
       is_active,
       // تحديث تاريخ الصلاحية في قاعدة البيانات
       expiry_date: expiry_date && expiry_date.trim() !== '' ? expiry_date : null,

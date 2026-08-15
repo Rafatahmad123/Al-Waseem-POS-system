@@ -46,6 +46,7 @@ export interface Database {
           current_stock: number
           min_stock_level: number
           expiry_date: string | null
+          is_bulk: boolean
           is_active: boolean
           created_at: string
           updated_at: string
@@ -63,6 +64,7 @@ export interface Database {
           current_stock?: number
           min_stock_level?: number
           expiry_date?: string | null
+          is_bulk?: boolean
           is_active?: boolean
           created_at?: string
           updated_at?: string
@@ -80,6 +82,7 @@ export interface Database {
           current_stock?: number
           min_stock_level?: number
           expiry_date?: string | null
+          is_bulk?: boolean
           is_active?: boolean
           created_at?: string
           updated_at?: string

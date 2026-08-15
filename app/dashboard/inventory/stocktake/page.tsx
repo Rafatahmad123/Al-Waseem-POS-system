@@ -3,6 +3,7 @@
 import { useState, useRef } from 'react'
 import { Barcode, Package, CheckCircle, XCircle, ArrowRight, Search } from 'lucide-react'
 import { getProductByBarcode, adjustStockForStocktake } from '@/app/actions/products'
+import { normalizeNumberInput } from '@/lib/numberNormalization'
 
 export default function StocktakePage() {
   const [barcode, setBarcode] = useState('')
@@ -12,6 +13,13 @@ export default function StocktakePage() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
+
+  // Compute normalized physical stock value
+  const normalizedPhysicalStock = product && physicalStock 
+    ? (product.is_bulk 
+        ? normalizeNumberInput(physicalStock) 
+        : parseInt(normalizeNumberInput(physicalStock).toString()))
+    : null
 
   const handleSearch = async () => {
     if (!barcode.trim()) return
@@ -39,9 +47,15 @@ export default function StocktakePage() {
   const handleAdjustment = async () => {
     if (!product || !physicalStock) return
 
-    const physicalStockNum = parseInt(physicalStock)
+    // Use parseFloat for bulk items, parseInt for regular items
+    const physicalStockNum = product.is_bulk 
+      ? normalizeNumberInput(physicalStock) 
+      : parseInt(normalizeNumberInput(physicalStock).toString())
+    
     if (isNaN(physicalStockNum) || physicalStockNum < 0) {
-      setError('الكمية يجب أن تكون رقماً صحيحاً غير سالب')
+      setError(product.is_bulk 
+        ? 'الوزن يجب أن يكون رقماً غير سالب' 
+        : 'الكمية يجب أن تكون رقماً صحيحاً غير سالب')
       return
     }
 
@@ -163,44 +177,51 @@ export default function StocktakePage() {
                 مخزون النظام
               </label>
               <div className="text-3xl font-bold text-slate-900">
-                {product.current_stock}
+                {product.current_stock} {product.is_bulk ? 'kg' : ''}
               </div>
               <p className="text-sm text-slate-600 mt-1">الكمية المسجلة في النظام</p>
+              {product.is_bulk && (
+                <span className="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded mt-2 inline-block">بيع بالوزن</span>
+              )}
             </div>
 
             {/* Physical Stock Input */}
             <div className="bg-blue-50 rounded-lg p-4 border-2 border-blue-200">
               <label className="block text-sm font-medium text-slate-700 mb-2">
-                المخزون الفعلي
+                المخزون الفعلي {product.is_bulk ? '(kg)' : ''}
               </label>
               <input
                 ref={inputRef}
-                type="number"
+                type="text"
+                inputMode={product.is_bulk ? "decimal" : "numeric"}
                 value={physicalStock}
                 onChange={(e) => setPhysicalStock(e.target.value)}
                 onKeyPress={handleKeyPress}
                 min="0"
                 className="w-full text-3xl font-bold text-blue-900 bg-transparent border-none focus:outline-none focus:ring-0"
-                placeholder="أدخل الكمية"
+                placeholder={product.is_bulk ? "أدخل الوزن (مثال: 1.5)" : "أدخل الكمية"}
               />
-              <p className="text-sm text-slate-600 mt-1">الكمية الفعلية في المخزن</p>
+              <p className="text-sm text-slate-600 mt-1">
+                {product.is_bulk ? 'الوزن الفعلي في المخزن (kg)' : 'الكمية الفعلية في المخزن'}
+              </p>
             </div>
           </div>
 
           {/* Adjustment Preview */}
-          {physicalStock && parseInt(physicalStock) !== product.current_stock && (
+          {physicalStock && normalizedPhysicalStock !== null && normalizedPhysicalStock !== product.current_stock && (
             <div className="mt-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-yellow-800">الفرق المتوقع</p>
                   <p className="text-2xl font-bold text-yellow-900">
-                    {parseInt(physicalStock) > product.current_stock ? '+' : ''}
-                    {parseInt(physicalStock) - product.current_stock}
+                    {(normalizedPhysicalStock > product.current_stock ? '+' : '')}
+                    {normalizedPhysicalStock - product.current_stock}
+                    {product.is_bulk ? ' kg' : ''}
                   </p>
                 </div>
                 <div className="text-right">
                   <p className="text-sm text-yellow-700">
-                    {parseInt(physicalStock) > product.current_stock
+                    {normalizedPhysicalStock > product.current_stock
                       ? 'زيادة في المخزون'
                       : 'نقص في المخزون'}
                   </p>
@@ -213,7 +234,7 @@ export default function StocktakePage() {
           <div className="mt-6">
             <button
               onClick={handleAdjustment}
-              disabled={!physicalStock || parseInt(physicalStock) === product.current_stock}
+              disabled={!physicalStock || normalizedPhysicalStock === null || normalizedPhysicalStock === product.current_stock}
               className="w-full bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 transition-colors disabled:bg-slate-400 flex items-center justify-center gap-2"
             >
               <CheckCircle className="h-5 w-5" />

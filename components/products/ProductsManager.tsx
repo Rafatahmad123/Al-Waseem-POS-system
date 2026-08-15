@@ -28,6 +28,7 @@ interface Product {
   current_stock: number
   min_stock_level: number
   expiry_date: string | null // <-- أضفنا حقل الصلاحية هنا
+  is_bulk: boolean
   is_active: boolean
   created_at: string
   updated_at: string
@@ -62,6 +63,7 @@ export default function ProductsManager({
     current_stock: '0',
     min_stock_level: '0',
     expiry_date: '', // <-- أضفنا خانة الصلاحية في النموذج
+    is_bulk: false,
     is_active: true,
   })
 
@@ -241,6 +243,7 @@ export default function ProductsManager({
       current_stock: product.current_stock.toString(),
       min_stock_level: product.min_stock_level.toString(),
       expiry_date: product.expiry_date ? product.expiry_date.split('T')[0] : '', // جلب تاريخ الصلاحية
+      is_bulk: product.is_bulk,
       is_active: product.is_active,
     })
     setShowForm(true)
@@ -259,6 +262,7 @@ export default function ProductsManager({
       current_stock: '0',
       min_stock_level: '0',
       expiry_date: '',
+      is_bulk: false,
       is_active: true,
     })
     setError('')
@@ -353,6 +357,23 @@ export default function ProductsManager({
               </div>
 
               <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">بيع بالوزن</label>
+                <div className="flex items-center mt-2">
+                  <input
+                    type="checkbox"
+                    id="is_bulk"
+                    checked={formData.is_bulk}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, is_bulk: e.target.checked }))}
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-slate-300 rounded"
+                  />
+                  <label htmlFor="is_bulk" className="ml-2 text-sm text-slate-600">
+                    هذا المنتج يباع بالوزن (kg)
+                  </label>
+                </div>
+                <p className="text-xs text-slate-500 mt-1">عند التفعيل، سيطلب من المستخدم إدخال الوزن عند البيع.</p>
+              </div>
+
+              <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">التصنيف</label>
                 <select
                   value={formData.category_id}
@@ -402,6 +423,50 @@ export default function ProductsManager({
               </div>
             </div>
 
+            {/* حقول المخزون */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">المخزون الحالي {formData.is_bulk ? '(kg)' : ''}</label>
+                <input
+                  type="number"
+                  step={formData.is_bulk ? "0.001" : "1"}
+                  value={formData.current_stock}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, current_stock: e.target.value }))}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  min="0"
+                />
+                <p className="text-xs text-slate-500 mt-1">
+                  {formData.is_bulk ? 'الوزن بالكيلوجرام (يدعم الأرقام العشرية)' : 'الكمية الصحيحة'}
+                </p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">حد المخزون الأدنى</label>
+                <input
+                  type="number"
+                  step="1"
+                  value={formData.min_stock_level}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, min_stock_level: e.target.value }))}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  min="0"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  id="is_active"
+                  checked={formData.is_active}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, is_active: e.target.checked }))}
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-slate-300 rounded"
+                />
+                <label htmlFor="is_active" className="ml-2 text-sm text-slate-600">
+                  نشط
+                </label>
+              </div>
+            </div>
+
             <div className="flex gap-3 pt-2">
               <button
                 type="submit"
@@ -442,6 +507,7 @@ export default function ProductsManager({
                 <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase">الباركود</th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase">الاسم</th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase">تاريخ الصلاحية</th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase">بيع بالوزن</th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase">سعر البيع</th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase">المخزون</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">الإجراءات</th>
@@ -450,7 +516,7 @@ export default function ProductsManager({
             <tbody className="bg-white divide-y divide-slate-200">
               {filteredProducts.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-8 text-center text-slate-500">
+                  <td colSpan={7} className="px-6 py-8 text-center text-slate-500">
                     لا توجد منتجات مطابقة.
                   </td>
                 </tr>
@@ -476,11 +542,20 @@ export default function ProductsManager({
                           <span className="text-slate-400 text-xs">غير محدد</span>
                         )}
                       </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm">
+                        {product.is_bulk ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-orange-100 text-orange-800">
+                            نعم
+                          </span>
+                        ) : (
+                          <span className="text-slate-400 text-xs">لا</span>
+                        )}
+                      </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-900">
                         ${product.selling_price_usd.toFixed(2)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-900">
-                        {product.current_stock}
+                        {product.current_stock} {product.is_bulk ? 'kg' : ''}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-left text-sm font-medium">
                         <button onClick={() => handleEdit(product)} className="text-blue-600 hover:text-blue-900 ml-3">

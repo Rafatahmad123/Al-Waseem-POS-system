@@ -18,6 +18,7 @@ interface Product {
   selling_price_syp: number
   current_stock: number
   min_stock_level: number
+  is_bulk: boolean
   is_active: boolean
 }
 
