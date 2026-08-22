@@ -12,9 +12,10 @@ export interface CartItem {
 
 interface CartStore {
   items: CartItem[]
-  addItem: (item: Omit<CartItem, 'quantity'>, quantity?: number) => CartItem
+  addItem: (item: Omit<CartItem, 'quantity'>, quantity?: number) => void
   removeItem: (productId: string) => void
   updateQuantity: (productId: string, quantity: number) => void
+  updateItemPrice: (productId: string, sellingPriceUSD: number, sellingPriceSYP: number) => void
   clearCart: () => void
   getTotalUSD: () => number
   getTotalSYP: () => number
@@ -52,6 +53,16 @@ export const useCartStore = create<CartStore>((set, get) => ({
       items: state.items.map((i) =>
         i.productId === productId
           ? { ...i, quantity: Math.max(0, Math.min(quantity, i.currentStock)) }
+          : i
+      ),
+    }))
+  },
+
+  updateItemPrice: (productId, sellingPriceUSD, sellingPriceSYP) => {
+    set((state) => ({
+      items: state.items.map((i) =>
+        i.productId === productId
+          ? { ...i, sellingPriceUSD, sellingPriceSYP }
           : i
       ),
     }))

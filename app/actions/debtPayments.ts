@@ -61,3 +61,66 @@ export async function recordCreditSale(customerId: string, saleAmount: number, s
     return { error: 'Failed to record credit sale' }
   }
 }
+
+export async function createManualDebt(formData: FormData) {
+  try {
+    const customerId = formData.get('customer_id') as string
+    const amount = parseFloat(formData.get('amount') as string)
+    const notes = formData.get('notes') as string | null
+
+    if (!customerId) return { error: 'Customer ID is required' }
+    if (isNaN(amount) || amount <= 0) return { error: 'Debt amount must be positive' }
+
+    // Get current customer balance
+    const { data: customer, error: customerError } = await supabase
+      .from('customers')
+      .select('current_balance')
+      .eq('id', customerId)
+      .single()
+
+    if (customerError || !customer) {
+      return { error: 'Customer not found' }
+    }
+
+    // Calculate new balance (debt increases the balance)
+    const newBalance = customer.current_balance + amount
+
+    // Update customer balance
+    const { error: updateError } = await supabase
+      .from('customers')
+      .update({ current_balance: newBalance })
+      .eq('id', customerId)
+
+    if (updateError) {
+      console.error('[DEBT CREATION] Error updating customer balance:', updateError)
+      return { error: updateError.message }
+    }
+
+    // Record the debt in customer ledger
+    const { error: ledgerError } = await supabase
+      .from('customer_ledger')
+      .insert({
+        customer_id: customerId,
+        transaction_type: 'debt',
+        amount: amount,
+        balance_after: newBalance,
+        notes: notes || `Manual debt addition: ${amount}`
+      })
+
+    if (ledgerError) {
+      console.error('[DEBT CREATION] Error recording in ledger:', ledgerError)
+      return { error: ledgerError.message }
+    }
+
+    revalidatePath('/dashboard/customers')
+    revalidatePath(`/dashboard/customers/${customerId}`)
+    return { 
+      success: true, 
+      newBalance,
+      message: `Debt of ${amount} added successfully. New balance: ${newBalance}`
+    }
+  } catch (error) {
+    console.error('[DEBT CREATION] Error:', error)
+    return { error: 'Failed to create debt' }
+  }
+}

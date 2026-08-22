@@ -295,3 +295,188 @@ export async function deleteSale(id: string) {
   revalidatePath('/dashboard/products')
   return { success: true }
 }
+
+export async function processReturn(formData: FormData) {
+  const saleId = formData.get('sale_id') as string
+  const itemsJson = formData.get('items') as string
+  const notes = formData.get('notes') as string | null
+
+  if (!saleId) {
+    return { error: 'Sale ID is required' }
+  }
+
+  if (!itemsJson) {
+    return { error: 'Items to return are required' }
+  }
+
+  const returnItems = JSON.parse(itemsJson)
+
+  // Get the original sale details
+  const { data: sale, error: saleError } = await supabase
+    .from('sales')
+    .select('*, customers(name, current_balance)')
+    .eq('id', saleId)
+    .single()
+
+  if (saleError || !sale) {
+    return { error: 'Sale not found' }
+  }
+
+  // Get original sale items
+  const { data: originalSaleItems, error: itemsError } = await supabase
+    .from('sale_items')
+    .select('*')
+    .eq('sale_id', saleId)
+
+  if (itemsError || !originalSaleItems) {
+    return { error: 'Failed to fetch sale items' }
+  }
+
+  // Validate return quantities
+  for (const returnItem of returnItems) {
+    const originalItem = originalSaleItems.find(
+      (item: any) => item.product_id === returnItem.productId
+    )
+
+    if (!originalItem) {
+      return { error: `Item ${returnItem.productId} not found in original sale` }
+    }
+
+    if (returnItem.quantity > originalItem.quantity) {
+      return { error: `Cannot return more than sold quantity for item ${returnItem.productId}` }
+    }
+  }
+
+  // Process return - restore stock
+  for (const returnItem of returnItems) {
+    const { data: product } = await supabase
+      .from('products')
+      .select('current_stock')
+      .eq('id', returnItem.productId)
+      .eq('is_active', true)
+      .single()
+
+    if (product) {
+      const newStock = product.current_stock + returnItem.quantity
+      const stockResult = await updateStockAtomically(
+        returnItem.productId,
+        newStock,
+        'return',
+        `Return from sale ${saleId} - ${returnItem.quantity} units returned`
+      )
+
+      if (stockResult.error) {
+        console.error('[RETURN] Error restoring stock:', stockResult.error)
+        return { error: stockResult.error }
+      }
+    }
+  }
+
+  // Calculate return amount
+  const returnAmountUSD = returnItems.reduce(
+    (sum: number, item: any) => sum + (item.sellingPriceUSD * item.quantity),
+    0
+  )
+
+  // If the sale was on credit, update customer balance
+  if (sale.payment_type === 'Credit' && sale.customer_id) {
+    const { data: customer } = await supabase
+      .from('customers')
+      .select('current_balance')
+      .eq('id', sale.customer_id)
+      .single()
+
+    if (customer) {
+      const newBalance = customer.current_balance - returnAmountUSD
+      const { error: balanceError } = await supabase
+        .from('customers')
+        .update({ current_balance: newBalance })
+        .eq('id', sale.customer_id)
+
+      if (balanceError) {
+        console.error('[RETURN] Error updating customer balance:', balanceError)
+        return { error: balanceError.message }
+      }
+
+      // Record the return in customer ledger
+      const { error: ledgerError } = await supabase
+        .from('customer_ledger')
+        .insert({
+          customer_id: sale.customer_id,
+          sale_id: saleId,
+          transaction_type: 'return',
+          amount: -returnAmountUSD,
+          balance_after: newBalance,
+          notes: notes || `Return from sale ${saleId}`
+        })
+
+      if (ledgerError) {
+        console.error('[RETURN] Error recording in ledger:', ledgerError)
+        return { error: ledgerError.message }
+      }
+    }
+  }
+
+  revalidatePath('/dashboard/sales')
+  revalidatePath('/dashboard/products')
+  revalidatePath('/dashboard/customers')
+  return { 
+    success: true, 
+    returnAmount: returnAmountUSD,
+    message: `Return processed successfully. $${returnAmountUSD.toFixed(2)} refunded.`
+  }
+}
+
+export async function processDirectReturn(formData: FormData) {
+  const itemsJson = formData.get('items') as string
+  const notes = formData.get('notes') as string | null
+
+  if (!itemsJson) {
+    return { error: 'Items to return are required' }
+  }
+
+  const returnItems = JSON.parse(itemsJson)
+
+  if (returnItems.length === 0) {
+    return { error: 'At least one item is required for return' }
+  }
+
+  // Process return - restore stock
+  for (const returnItem of returnItems) {
+    const { data: product } = await supabase
+      .from('products')
+      .select('current_stock')
+      .eq('id', returnItem.productId)
+      .eq('is_active', true)
+      .single()
+
+    if (product) {
+      const newStock = product.current_stock + returnItem.quantity
+      const stockResult = await updateStockAtomically(
+        returnItem.productId,
+        newStock,
+        'return',
+        `Direct return - ${returnItem.quantity} units returned. ${notes || ''}`
+      )
+
+      if (stockResult.error) {
+        console.error('[DIRECT RETURN] Error restoring stock:', stockResult.error)
+        return { error: stockResult.error }
+      }
+    }
+  }
+
+  // Calculate return amount
+  const returnAmountUSD = returnItems.reduce(
+    (sum: number, item: any) => sum + (item.sellingPriceUSD * item.quantity),
+    0
+  )
+
+  revalidatePath('/dashboard/sales')
+  revalidatePath('/dashboard/products')
+  return { 
+    success: true, 
+    returnAmount: returnAmountUSD,
+    message: `Return processed successfully. $${returnAmountUSD.toFixed(2)} refunded to customer.`
+  }
+}

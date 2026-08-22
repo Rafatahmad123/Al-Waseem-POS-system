@@ -46,7 +46,7 @@ export default function SalesManager({ initialProducts }: SalesManagerProps) {
   const [isAddingToCart, setIsAddingToCart] = useState(false)
   const weightInputRef = useRef<HTMLInputElement>(null)
 
-  const { items, addItem, removeItem, updateQuantity, clearCart, getTotalUSD, getTotalSYP, getTotalItems } = useCartStore()
+  const { items, addItem, removeItem, updateQuantity, updateItemPrice, clearCart, getTotalUSD, getTotalSYP, getTotalItems } = useCartStore()
 
   // Fetch customers and exchange rate on mount
   useEffect(() => {
@@ -250,7 +250,7 @@ export default function SalesManager({ initialProducts }: SalesManagerProps) {
                   ${p.selling_price_usd.toFixed(2)}
                 </p>
                 <p className="text-indigo-600 font-semibold">
-                  {p.selling_price_syp.toLocaleString()} SYP
+                  {p.selling_price_syp.toLocaleString('en-US')} SYP
                 </p>
               </div>
             ))}
@@ -297,7 +297,7 @@ export default function SalesManager({ initialProducts }: SalesManagerProps) {
                   }}
                 />
                 <button
-                  onClick={handleWeightSubmit}
+                  onClick={() => handleWeightSubmit()}
                   disabled={isAddingToCart}
                   className="bg-blue-600 text-white px-3 py-2 rounded text-sm hover:bg-blue-700 disabled:bg-slate-400"
                 >
@@ -396,11 +396,45 @@ export default function SalesManager({ initialProducts }: SalesManagerProps) {
               <div key={item.productId} className="flex justify-between mb-2">
                 <div className="flex-1">
                   <div>{item.name} x {item.quantity} {isBulk ? 'kg' : ''}</div>
-                  <div className="text-sm text-slate-600">
-                    ${itemTotalUSD.toFixed(2)}
+                  
+                  {/* USD Price Input */}
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-slate-600">$</span>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={item.sellingPriceUSD.toFixed(2)}
+                      onChange={(e) => {
+                        const newPriceUSD = parseFloat(e.target.value) || 0
+                        const newPriceSYP = newPriceUSD * exchangeRate
+                        updateItemPrice(item.productId, newPriceUSD, newPriceSYP)
+                      }}
+                      className="w-20 p-1 border rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <span className="text-sm text-slate-600">
+                      = ${itemTotalUSD.toFixed(2)}
+                    </span>
                   </div>
-                  <div className="text-sm text-indigo-600">
-                    {itemTotalSYP > 0 ? itemTotalSYP.toLocaleString() : (itemTotalUSD * exchangeRate).toLocaleString()} SYP
+                  
+                  {/* SYP Price Input */}
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="text-sm text-indigo-600">SYP</span>
+                    <input
+                      type="number"
+                      step="1"
+                      min="0"
+                      value={item.sellingPriceSYP > 0 ? Math.round(item.sellingPriceSYP) : Math.round(item.sellingPriceUSD * exchangeRate)}
+                      onChange={(e) => {
+                        const newPriceSYP = parseFloat(e.target.value) || 0
+                        const newPriceUSD = newPriceSYP / exchangeRate
+                        updateItemPrice(item.productId, newPriceUSD, newPriceSYP)
+                      }}
+                      className="w-24 p-1 border rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <span className="text-sm text-indigo-600">
+                      = {itemTotalSYP > 0 ? itemTotalSYP.toLocaleString() : (itemTotalUSD * exchangeRate).toLocaleString()} SYP
+                    </span>
                   </div>
                 </div>
                 <button onClick={() => removeItem(item.productId)} className="text-red-500"><Trash2 size={16}/></button>

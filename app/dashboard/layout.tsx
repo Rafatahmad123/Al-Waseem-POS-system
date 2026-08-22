@@ -15,7 +15,8 @@ import {
   Plus,
   DollarSign,
   ArrowRight,
-  Shield
+  Shield,
+  RotateCcw
 } from 'lucide-react'
 
 export default function DashboardLayout({
@@ -41,6 +42,7 @@ export default function DashboardLayout({
       items: [
         { href: '/dashboard/customers', label: 'العملاء', icon: Users },
         { href: '/dashboard/sales', label: 'المبيعات', icon: ShoppingCart },
+        { href: '/dashboard/sales/returns', label: 'مرتجع المبيعات', icon: RotateCcw },
         { href: '/dashboard/purchases', label: 'المشتريات', icon: ShoppingCart },
       ]
     },

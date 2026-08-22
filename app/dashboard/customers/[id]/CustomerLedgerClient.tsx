@@ -1,6 +1,6 @@
 'use client'
 
-import { ArrowLeft, DollarSign, Calendar, User, Phone, ChevronDown, ChevronRight, Package } from 'lucide-react'
+import { ArrowLeft, DollarSign, Calendar, User, Phone, ChevronDown, ChevronRight, Package, Trash2, AlertTriangle } from 'lucide-react'
 import Link from 'next/link'
 import { useState, useEffect } from 'react'
 import { getExchangeRate, formatDualCurrency } from '@/lib/pricing'
@@ -28,7 +28,7 @@ interface Sale {
 interface LedgerEntry {
   id: string
   customer_id: string
-  transaction_type: 'purchase' | 'payment'
+  transaction_type: 'purchase' | 'payment' | 'debt'
   amount: number
   balance_after: number
   notes: string | null
@@ -49,15 +49,21 @@ interface CustomerLedgerClientProps {
   customer: Customer
   ledger: LedgerEntry[]
   handlePayment: (formData: FormData) => Promise<void>
+  handleDebtCreation: (formData: FormData) => Promise<void>
+  handleDeleteCustomer: () => Promise<void>
 }
 
 export default function CustomerLedgerClient({
   customer,
   ledger,
-  handlePayment
+  handlePayment,
+  handleDebtCreation,
+  handleDeleteCustomer
 }: CustomerLedgerClientProps) {
   const [expandedEntries, setExpandedEntries] = useState<Set<string>>(new Set())
   const [exchangeRate, setExchangeRate] = useState<number>(12500)
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
 
   useEffect(() => {
     const fetchExchangeRate = async () => {
@@ -96,6 +102,13 @@ export default function CustomerLedgerClient({
             <p className="text-slate-600 mt-1">سجل المعاملات والديون</p>
           </div>
         </div>
+        <button
+          onClick={() => setShowDeleteModal(true)}
+          className="flex items-center gap-2 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors"
+        >
+          <Trash2 className="h-4 w-4" />
+          <span>حذف العميل</span>
+        </button>
       </div>
 
       {/* Customer Info Card */}
@@ -199,6 +212,50 @@ export default function CustomerLedgerClient({
         </div>
       )}
 
+      {/* Add Debt Form */}
+      <div className="bg-white rounded-lg shadow border border-slate-200 p-6">
+        <div className="flex items-center gap-2 mb-4">
+          <DollarSign className="h-5 w-5 text-red-600" />
+          <h3 className="text-lg font-semibold text-slate-900">إضافة دين جديد</h3>
+        </div>
+        <form action={handleDebtCreation} className="space-y-4">
+          <input type="hidden" name="customer_id" value={customer.id} />
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">
+                مبلغ الدين
+              </label>
+              <input
+                type="number"
+                name="amount"
+                step="0.01"
+                min="0.01"
+                required
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="0.00"
+              />
+            </div>
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-slate-700 mb-2">
+                ملاحظات (اختياري)
+              </label>
+              <input
+                type="text"
+                name="notes"
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="سبب الدين أو ملاحظات"
+              />
+            </div>
+          </div>
+          <button
+            type="submit"
+            className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors"
+          >
+            تسجيل الدين
+          </button>
+        </form>
+      </div>
+
       {/* Transaction History */}
       <div className="bg-white rounded-lg shadow border border-slate-200">
         <div className="p-6 border-b border-slate-200">
@@ -229,19 +286,20 @@ export default function CustomerLedgerClient({
                       </div>
                       
                       <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
-                        entry.transaction_type === 'purchase'
+                        entry.transaction_type === 'purchase' || entry.transaction_type === 'debt'
                           ? 'bg-red-100 text-red-800'
                           : 'bg-green-100 text-green-800'
                       }`}>
-                        {entry.transaction_type === 'purchase' ? 'شراء (دين)' : 'دفع'}
+                        {entry.transaction_type === 'purchase' ? 'شراء (دين)' : 
+                         entry.transaction_type === 'debt' ? 'دين يدوي' : 'دفع'}
                       </span>
 
                       <span className={`text-sm font-medium ${
-                        entry.transaction_type === 'purchase'
+                        entry.transaction_type === 'purchase' || entry.transaction_type === 'debt'
                           ? 'text-red-600'
                           : 'text-green-600'
                       }`}>
-                        {entry.transaction_type === 'purchase' ? '+' : '-'}
+                        {entry.transaction_type === 'purchase' || entry.transaction_type === 'debt' ? '+' : '-'}
                         {formatDualCurrency(entry.amount, exchangeRate)}
                       </span>
 
@@ -332,6 +390,62 @@ export default function CustomerLedgerClient({
           </div>
         )}
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
+            <div className="p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="bg-red-100 p-3 rounded-full">
+                  <AlertTriangle className="h-6 w-6 text-red-600" />
+                </div>
+                <h3 className="text-xl font-bold text-slate-900">تأكيد حذف العميل</h3>
+              </div>
+              
+              <p className="text-slate-600 mb-4">
+                هل أنت متأكد من أنك تريد حذف العميل "{customer.name}"؟
+              </p>
+              
+              <p className="text-sm text-slate-500 mb-4">
+                هذا الإجراء سيقوم بتعطيل العميل. إذا كان للعميل رصيد أو سجل معاملات، فلن يتم الحذف.
+              </p>
+
+              {deleteError && (
+                <div className="bg-red-50 text-red-700 p-3 rounded mb-4">
+                  {deleteError}
+                </div>
+              )}
+
+              <div className="flex gap-3 justify-end">
+                <button
+                  onClick={() => {
+                    setShowDeleteModal(false)
+                    setDeleteError('')
+                  }}
+                  className="px-4 py-2 border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors"
+                >
+                  إلغاء
+                </button>
+                <button
+                  onClick={async () => {
+                    try {
+                      await handleDeleteCustomer()
+                      setShowDeleteModal(false)
+                      setDeleteError('')
+                    } catch (error) {
+                      setDeleteError(error instanceof Error ? error.message : 'Failed to delete customer')
+                    }
+                  }}
+                  className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                >
+                  تأكيد الحذف
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
