@@ -48,6 +48,7 @@ export interface Database {
           expiry_date: string | null
           is_bulk: boolean
           is_active: boolean
+          price_type: 'USD' | 'SYP'
           created_at: string
           updated_at: string
         }
@@ -66,6 +67,7 @@ export interface Database {
           expiry_date?: string | null
           is_bulk?: boolean
           is_active?: boolean
+          price_type?: 'USD' | 'SYP'
           created_at?: string
           updated_at?: string
         }
@@ -84,6 +86,7 @@ export interface Database {
           expiry_date?: string | null
           is_bulk?: boolean
           is_active?: boolean
+          price_type?: 'USD' | 'SYP'
           created_at?: string
           updated_at?: string
         }

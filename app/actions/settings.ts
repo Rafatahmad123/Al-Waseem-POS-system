@@ -73,6 +73,7 @@ export async function updateExchangeRate(newRate: number) {
     // تحديث الصفحات التي تعتمد على سعر الصرف لتعكس القيمة الجديدة فوراً
     revalidatePath('/dashboard/products')
     revalidatePath('/dashboard/settings')
+    revalidatePath('/dashboard/sales/new')
     
     return { success: true }
   } catch (error) {

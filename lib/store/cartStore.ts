@@ -8,6 +8,8 @@ export interface CartItem {
   sellingPriceSYP: number
   quantity: number
   currentStock: number
+  priceType: 'USD' | 'SYP' // Track the product's pricing type
+  isManuallyOverridden?: boolean // Track if price was manually changed by cashier
 }
 
 interface CartStore {
@@ -16,6 +18,7 @@ interface CartStore {
   removeItem: (productId: string) => void
   updateQuantity: (productId: string, quantity: number) => void
   updateItemPrice: (productId: string, sellingPriceUSD: number, sellingPriceSYP: number) => void
+  recalculateAllSYPPrices: (newExchangeRate: number) => void
   clearCart: () => void
   getTotalUSD: () => number
   getTotalSYP: () => number
@@ -62,9 +65,33 @@ export const useCartStore = create<CartStore>((set, get) => ({
     set((state) => ({
       items: state.items.map((i) =>
         i.productId === productId
-          ? { ...i, sellingPriceUSD, sellingPriceSYP }
+          ? { ...i, sellingPriceUSD, sellingPriceSYP, isManuallyOverridden: true }
           : i
       ),
+    }))
+  },
+
+  recalculateAllSYPPrices: (newExchangeRate) => {
+    set((state) => ({
+      items: state.items.map((i) => {
+        // Only recalculate if price was not manually overridden
+        if (!i.isManuallyOverridden) {
+          if (i.priceType === 'USD') {
+            // USD-based: SYP = USD * exchangeRate
+            return {
+              ...i,
+              sellingPriceSYP: Math.round(i.sellingPriceUSD * newExchangeRate)
+            }
+          } else {
+            // SYP-fixed: SYP stays constant, USD changes
+            return {
+              ...i,
+              sellingPriceUSD: i.sellingPriceSYP / newExchangeRate
+            }
+          }
+        }
+        return i
+      }),
     }))
   },
 

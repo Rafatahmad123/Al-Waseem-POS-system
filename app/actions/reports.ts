@@ -8,6 +8,10 @@ export interface ReportMetrics {
   netProfit: number
   totalSales: number
   totalItemsSold: number
+  cashSales: number
+  creditSales: number
+  cashRevenue: number
+  creditRevenue: number
 }
 
 export interface DateRange {
@@ -21,13 +25,13 @@ export interface DateRange {
  * @returns Report metrics including revenue, cost, and profit
  */
 export async function getReportMetrics(dateRange?: DateRange): Promise<ReportMetrics> {
-  let salesQuery = supabase.from('sales').select('total_amount')
+  let salesQuery = supabase.from('sales').select('total_amount, payment_type')
 
   if (dateRange) {
     // Convert date strings to full ISO timestamps for proper timezone handling
     const startDateTime = new Date(dateRange.startDate).toISOString()
     const endDateTime = new Date(dateRange.endDate + 'T23:59:59.999Z').toISOString()
-    
+
     salesQuery = salesQuery.gte('sale_date', startDateTime).lte('sale_date', endDateTime)
   }
 
@@ -40,11 +44,32 @@ export async function getReportMetrics(dateRange?: DateRange): Promise<ReportMet
       netProfit: 0,
       totalSales: 0,
       totalItemsSold: 0,
+      cashSales: 0,
+      creditSales: 0,
+      cashRevenue: 0,
+      creditRevenue: 0,
     }
   }
 
   const totalRevenue = sales?.reduce((sum, sale) => sum + Number(sale.total_amount), 0) || 0
   const totalSales = sales?.length || 0
+
+  // Calculate payment method breakdown
+  let cashSales = 0
+  let creditSales = 0
+  let cashRevenue = 0
+  let creditRevenue = 0
+
+  sales?.forEach((sale: any) => {
+    const amount = Number(sale.total_amount)
+    if (sale.payment_type === 'Cash') {
+      cashSales += 1
+      cashRevenue += amount
+    } else if (sale.payment_type === 'Credit') {
+      creditSales += 1
+      creditRevenue += amount
+    }
+  })
 
   // Get sale items to calculate cost and items sold
   let saleItemsQuery = supabase
@@ -52,6 +77,9 @@ export async function getReportMetrics(dateRange?: DateRange): Promise<ReportMet
     .select(`
       quantity,
       selling_price_usd,
+      sales!inner (
+        sale_date
+      ),
       products (
         cost_price
       )
@@ -60,10 +88,10 @@ export async function getReportMetrics(dateRange?: DateRange): Promise<ReportMet
   if (dateRange) {
     const startDateTime = new Date(dateRange.startDate).toISOString()
     const endDateTime = new Date(dateRange.endDate + 'T23:59:59.999Z').toISOString()
-    
+
     saleItemsQuery = saleItemsQuery
-      .gte('created_at', startDateTime)
-      .lte('created_at', endDateTime)
+      .gte('sales.sale_date', startDateTime)
+      .lte('sales.sale_date', endDateTime)
   }
 
   const { data: saleItems, error: itemsError } = await saleItemsQuery
@@ -75,6 +103,10 @@ export async function getReportMetrics(dateRange?: DateRange): Promise<ReportMet
       netProfit: totalRevenue,
       totalSales,
       totalItemsSold: 0,
+      cashSales,
+      creditSales,
+      cashRevenue,
+      creditRevenue,
     }
   }
 
@@ -96,6 +128,10 @@ export async function getReportMetrics(dateRange?: DateRange): Promise<ReportMet
     netProfit,
     totalSales,
     totalItemsSold,
+    cashSales,
+    creditSales,
+    cashRevenue,
+    creditRevenue,
   }
 }
 
@@ -148,6 +184,9 @@ export async function getTopSellingProducts(dateRange?: DateRange, limit: number
     .select(`
       quantity,
       total_price,
+      sales!inner (
+        sale_date
+      ),
       products (
         id,
         name,
@@ -160,10 +199,10 @@ export async function getTopSellingProducts(dateRange?: DateRange, limit: number
   if (dateRange) {
     const startDateTime = new Date(dateRange.startDate).toISOString()
     const endDateTime = new Date(dateRange.endDate + 'T23:59:59.999Z').toISOString()
-    
+
     query = query
-      .gte('created_at', startDateTime)
-      .lte('created_at', endDateTime)
+      .gte('sales.sale_date', startDateTime)
+      .lte('sales.sale_date', endDateTime)
   }
 
   const { data, error } = await query

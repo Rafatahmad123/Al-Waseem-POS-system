@@ -30,6 +30,7 @@ interface Product {
   expiry_date: string | null // <-- أضفنا حقل الصلاحية هنا
   is_bulk: boolean
   is_active: boolean
+  price_type: 'USD' | 'SYP'
   created_at: string
   updated_at: string
 }
@@ -65,6 +66,7 @@ export default function ProductsManager({
     expiry_date: '', // <-- أضفنا خانة الصلاحية في النموذج
     is_bulk: false,
     is_active: true,
+    price_type: 'USD' as 'USD' | 'SYP',
   })
 
   // بقية الدوال (handleCostPriceChange, handlePriceChange, إلخ...) تبقى كما هي...
@@ -74,31 +76,22 @@ export default function ProductsManager({
     const costPrice = parseFloat(value) || 0
     const MAX_SAFE_COST_PRICE = 999999999999999.99
     const safeCostPrice = Math.min(costPrice, MAX_SAFE_COST_PRICE)
-    
-    if (formPricingMode === 'USD') {
+
+    if (formData.price_type === 'USD') {
       const autoSellingPriceUSD = safeCostPrice * 1.20
       setFormData((prev) => ({
         ...prev,
         cost_price: value,
         selling_price_usd: autoSellingPriceUSD.toFixed(2),
-        selling_price_syp: '',
+        selling_price_syp: (autoSellingPriceUSD * exchangeRate).toFixed(2),
       }))
-    } else if (formPricingMode === 'SYP') {
+    } else {
       const autoSellingPriceSYP = safeCostPrice * 1.20
       setFormData((prev) => ({
         ...prev,
         cost_price: value,
-        selling_price_usd: '',
         selling_price_syp: autoSellingPriceSYP.toFixed(2),
-      }))
-    } else {
-      const autoSellingPriceUSD = safeCostPrice * 1.20
-      const autoSellingPriceSYP = autoSellingPriceUSD * exchangeRate
-      setFormData((prev) => ({
-        ...prev,
-        cost_price: value,
-        selling_price_usd: autoSellingPriceUSD.toFixed(2),
-        selling_price_syp: autoSellingPriceSYP.toFixed(2),
+        selling_price_usd: (autoSellingPriceSYP / exchangeRate).toFixed(2),
       }))
     }
   }
@@ -141,25 +134,34 @@ export default function ProductsManager({
     const MAX_SAFE_PRICE = 999999999999999.99
     const safeValue = Math.min(numValue, MAX_SAFE_PRICE)
 
-    if (formPricingMode === 'BOTH') {
+    if (formData.price_type === 'USD') {
       if (field === 'selling_price_usd') {
         setFormData((prev) => ({
           ...prev,
           selling_price_usd: value,
-          selling_price_syp: convertPrice(safeValue, 'USD', 'SYP', exchangeRate).toFixed(2),
+          selling_price_syp: (safeValue * exchangeRate).toFixed(2),
         }))
       } else {
         setFormData((prev) => ({
           ...prev,
           selling_price_syp: value,
-          selling_price_usd: convertPrice(safeValue, 'SYP', 'USD', exchangeRate).toFixed(2),
+          selling_price_usd: (safeValue / exchangeRate).toFixed(2),
         }))
       }
     } else {
-      setFormData((prev) => ({
-        ...prev,
-        [field]: value,
-      }))
+      if (field === 'selling_price_syp') {
+        setFormData((prev) => ({
+          ...prev,
+          selling_price_syp: value,
+          selling_price_usd: (safeValue / exchangeRate).toFixed(2),
+        }))
+      } else {
+        setFormData((prev) => ({
+          ...prev,
+          selling_price_usd: value,
+          selling_price_syp: (safeValue * exchangeRate).toFixed(2),
+        }))
+      }
     }
   }
 
@@ -223,15 +225,6 @@ export default function ProductsManager({
 
   const handleEdit = (product: Product) => {
     setEditingProduct(product)
-    let mode: 'SYP' | 'USD' | 'BOTH' = 'BOTH'
-    const hasUSD = product.selling_price_usd > 0
-    const hasSYP = product.selling_price_syp > 0
-    
-    if (hasUSD && hasSYP) mode = 'BOTH'
-    else if (hasUSD) mode = 'USD'
-    else if (hasSYP) mode = 'SYP'
-    
-    setFormPricingMode(mode)
     setFormData({
       barcode: product.barcode,
       name: product.name,
@@ -245,12 +238,12 @@ export default function ProductsManager({
       expiry_date: product.expiry_date ? product.expiry_date.split('T')[0] : '', // جلب تاريخ الصلاحية
       is_bulk: product.is_bulk,
       is_active: product.is_active,
+      price_type: product.price_type || 'USD',
     })
     setShowForm(true)
   }
 
   const resetForm = () => {
-    setFormPricingMode('BOTH')
     setFormData({
       barcode: '',
       name: '',
@@ -264,6 +257,7 @@ export default function ProductsManager({
       expiry_date: '',
       is_bulk: false,
       is_active: true,
+      price_type: 'USD',
     })
     setError('')
   }
@@ -388,6 +382,24 @@ export default function ProductsManager({
               </div>
             </div>
 
+            {/* Pricing Type Selector */}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">نوع التسعير / Pricing Currency</label>
+              <select
+                value={formData.price_type}
+                onChange={(e) => setFormData((prev) => ({ ...prev, price_type: e.target.value as 'USD' | 'SYP' }))}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="USD">دولار (USD) - السعر بالدولار، يتغير مع سعر الصرف</option>
+                <option value="SYP">ليرة ثابتة (Fixed SYP) - السعر بالليرة ثابت، الدولار يتغير مع سعر الصرف</option>
+              </select>
+              <p className="text-xs text-slate-500 mt-1">
+                {formData.price_type === 'USD'
+                  ? 'السعر بالدولار هو الأساسي، ويتم حساب السعر بالليرة بناءً على سعر الصرف الحالي'
+                  : 'السعر بالليرة ثابت ولا يتغير، ويتم حساب السعر بالدولار بناءً على سعر الصرف الحالي'}
+              </p>
+            </div>
+
             {/* بقية حقول الأسعار والمخزون */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
@@ -402,23 +414,29 @@ export default function ProductsManager({
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">سعر البيع (دولار)</label>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  {formData.price_type === 'USD' ? 'سعر البيع (دولار) *' : 'سعر البيع (دولار)'}
+                </label>
                 <input
                   type="number"
                   step="0.01"
                   value={formData.selling_price_usd}
                   onChange={(e) => handlePriceChange('selling_price_usd', e.target.value)}
                   className="w-full px-3 py-2 border border-slate-300 rounded-lg"
+                  required={formData.price_type === 'USD'}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">سعر البيع (ليرة)</label>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  {formData.price_type === 'SYP' ? 'سعر البيع (ليرة) *' : 'سعر البيع (ليرة)'}
+                </label>
                 <input
                   type="number"
                   step="0.01"
                   value={formData.selling_price_syp}
                   onChange={(e) => handlePriceChange('selling_price_syp', e.target.value)}
                   className="w-full px-3 py-2 border border-slate-300 rounded-lg"
+                  required={formData.price_type === 'SYP'}
                 />
               </div>
             </div>

@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useRef } from 'react'
-import { Barcode, Package, CheckCircle, XCircle, ArrowRight, Search } from 'lucide-react'
-import { getProductByBarcode, adjustStockForStocktake } from '@/app/actions/products'
+import { useState, useRef, useEffect } from 'react'
+import { Barcode, Package, CheckCircle, XCircle, ArrowRight, Search, ChevronDown } from 'lucide-react'
+import { getProductByBarcode, searchProducts, adjustStockForStocktake } from '@/app/actions/products'
 import { normalizeNumberInput } from '@/lib/numberNormalization'
 
 export default function StocktakePage() {
@@ -12,7 +12,10 @@ export default function StocktakePage() {
   const [isScanning, setIsScanning] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  const [searchResults, setSearchResults] = useState<any[]>([])
+  const [showDropdown, setShowDropdown] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+  const searchContainerRef = useRef<HTMLDivElement>(null)
 
   // Compute normalized physical stock value
   const normalizedPhysicalStock = product && physicalStock 
@@ -29,19 +32,35 @@ export default function StocktakePage() {
     setSuccess('')
     setProduct(null)
     setPhysicalStock('')
+    setSearchResults([])
+    setShowDropdown(false)
 
-    const result = await getProductByBarcode(barcode.trim())
+    const results = await searchProducts(barcode.trim())
 
-    if (result) {
-      setProduct(result)
-      setPhysicalStock(result.current_stock.toString())
+    if (results.length === 0) {
+      setError('المنتج غير موجود')
+    } else if (results.length === 1) {
+      // Single result - select it directly
+      setProduct(results[0])
+      setPhysicalStock(results[0].current_stock.toString())
       setTimeout(() => inputRef.current?.focus(), 100)
     } else {
-      setError('المنتج غير موجود')
+      // Multiple results - show dropdown
+      setSearchResults(results)
+      setShowDropdown(true)
     }
 
     setIsScanning(false)
     setBarcode('')
+  }
+
+  const handleSelectProduct = (selectedProduct: any) => {
+    setProduct(selectedProduct)
+    setPhysicalStock(selectedProduct.current_stock.toString())
+    setSearchResults([])
+    setShowDropdown(false)
+    setError('')
+    setTimeout(() => inputRef.current?.focus(), 100)
   }
 
   const handleAdjustment = async () => {
@@ -82,9 +101,15 @@ export default function StocktakePage() {
     if (e.key === 'Enter') {
       if (product) {
         handleAdjustment()
+      } else if (showDropdown && searchResults.length > 0) {
+        // Select first result from dropdown
+        handleSelectProduct(searchResults[0])
       } else {
         handleSearch()
       }
+    } else if (e.key === 'Escape') {
+      setShowDropdown(false)
+      setSearchResults([])
     }
   }
 
@@ -94,7 +119,42 @@ export default function StocktakePage() {
     setPhysicalStock('')
     setError('')
     setSuccess('')
+    setSearchResults([])
+    setShowDropdown(false)
   }
+
+  // Debounced search for autocomplete
+  useEffect(() => {
+    const timer = setTimeout(async () => {
+      if (barcode.trim().length >= 2 && !product) {
+        const results = await searchProducts(barcode.trim())
+        if (results.length > 1) {
+          setSearchResults(results)
+          setShowDropdown(true)
+        } else if (results.length === 1) {
+          setSearchResults([])
+          setShowDropdown(false)
+        }
+      } else {
+        setSearchResults([])
+        setShowDropdown(false)
+      }
+    }, 300)
+
+    return () => clearTimeout(timer)
+  }, [barcode, product])
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(event.target as Node)) {
+        setShowDropdown(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   return (
     <div className="space-y-6">
@@ -118,23 +178,49 @@ export default function StocktakePage() {
       )}
 
       {/* Barcode Scanner */}
-      <div className="bg-white rounded-lg shadow border border-slate-200 p-6">
-        <div className="flex gap-4">
-          <div className="flex-1">
+      <div className="bg-white rounded-lg shadow border border-slate-200 p-6 relative">
+        <div className="flex gap-4" ref={searchContainerRef}>
+          <div className="flex-1 relative">
             <label className="block text-sm font-medium text-slate-700 mb-2">
-              <Barcode className="inline h-4 w-4 ml-1" />
-              مسح الباركود
+              <Search className="inline h-4 w-4 ml-1" />
+              بحث عن منتج
             </label>
             <input
               type="text"
               value={barcode}
               onChange={(e) => setBarcode(e.target.value)}
               onKeyPress={handleKeyPress}
-              placeholder="أدخل الباركود أو امسح باستخدام ماسح الباركود"
+              placeholder="ابحث باسم المنتج أو أدخل/امسح الباركود..."
               className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-lg"
               disabled={isScanning || !!product}
               autoFocus
             />
+
+            {/* Search Results Dropdown */}
+            {showDropdown && searchResults.length > 0 && (
+              <div className="absolute z-50 w-full mt-2 bg-white border border-slate-300 rounded-lg shadow-lg max-h-96 overflow-y-auto">
+                {searchResults.map((result) => (
+                  <button
+                    key={result.id}
+                    onClick={() => handleSelectProduct(result)}
+                    className="w-full text-right px-4 py-3 hover:bg-slate-50 border-b border-slate-100 last:border-b-0 transition-colors"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1">
+                        <div className="font-medium text-slate-900">{result.name}</div>
+                        <div className="text-sm text-slate-600">الباركود: {result.barcode}</div>
+                      </div>
+                      <div className="text-left ml-4">
+                        <div className="text-sm text-slate-900">{result.current_stock} {result.is_bulk ? 'kg' : ''}</div>
+                        {result.is_bulk && (
+                          <span className="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded">بيع بالوزن</span>
+                        )}
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
           <div className="flex items-end">
             {!product ? (
@@ -250,22 +336,26 @@ export default function StocktakePage() {
         <ol className="space-y-2 text-sm text-blue-800">
           <li className="flex items-start gap-2">
             <span className="font-bold">1.</span>
-            <span>امسح الباركود باستخدام ماسح الباركود أو أدخله يدوياً</span>
+            <span>ابحث عن المنتج بالاسم أو أدخل/امسح الباركود</span>
           </li>
           <li className="flex items-start gap-2">
             <span className="font-bold">2.</span>
-            <span>سيظهر مخزون النظام الحالي للمنتج</span>
+            <span>إذا ظهرت قائمة منتجات، اختر المنتج المطلوب منها</span>
           </li>
           <li className="flex items-start gap-2">
             <span className="font-bold">3.</span>
-            <span>أدخل الكمية الفعلية الموجودة في المخزن</span>
+            <span>سيظهر مخزون النظام الحالي للمنتج</span>
           </li>
           <li className="flex items-start gap-2">
             <span className="font-bold">4.</span>
-            <span>اضغط على "تأكيد التعديل" لتحديث المخزون</span>
+            <span>أدخل الكمية الفعلية الموجودة في المخزن</span>
           </li>
           <li className="flex items-start gap-2">
             <span className="font-bold">5.</span>
+            <span>اضغط على "تأكيد التعديل" لتحديث المخزون</span>
+          </li>
+          <li className="flex items-start gap-2">
+            <span className="font-bold">6.</span>
             <span>سيتم تسجيل التعديل في سجل المخزون تلقائياً</span>
           </li>
         </ol>

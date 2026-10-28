@@ -38,7 +38,7 @@ export default async function CustomerLedgerPage({
 
   async function handleDeleteCustomer() {
     'use server'
-    const result = await deleteCustomer(customerId)
+    const result = await deleteCustomer(customerId, true) // Force delete with cascade
     if (result.error) {
       throw new Error(result.error)
     }

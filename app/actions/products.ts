@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabaseClient'
 import { ProductInsert, ProductUpdate } from '@/lib/types/database'
 import { getExchangeRate } from '@/app/actions/settings'
 
-export type MovementType = 'sale' | 'purchase' | 'adjustment' | 'return'
+export type MovementType = 'sale' | 'purchase' | 'adjustment' | 'return' | 'disposal'
 
 /**
  * Helper function to log inventory movements
@@ -124,7 +124,8 @@ export async function createProduct(formData: FormData) {
     const min_stock_level = parseInt(formData.get('min_stock_level') as string)
     const is_bulk = formData.get('is_bulk') === 'true'
     const is_active = formData.get('is_active') === 'true'
-    
+    const price_type = (formData.get('price_type') as string) || 'USD'
+
     // استقبال تاريخ الصلاحية من النموذج
     const expiry_date = formData.get('expiry_date') as string
 
@@ -138,30 +139,29 @@ export async function createProduct(formData: FormData) {
     const safeCostPrice = Math.min(finalCostPrice, MAX_SAFE_COST_PRICE)
 
     const exchangeRate = await getExchangeRate() || 12500
-    
-    // Determine pricing mode based on which selling price is provided
-    const hasUSD = !isNaN(selling_price_usd) && selling_price_usd > 0
-    const hasSYP = !isNaN(selling_price_syp) && selling_price_syp > 0
-    
+
+    // Calculate prices based on price_type
     let finalSellingPriceUSD: number
     let finalSellingPriceSYP: number
 
-    if (hasUSD && hasSYP) {
-      // BOTH mode - use provided prices
-      finalSellingPriceUSD = selling_price_usd
-      finalSellingPriceSYP = selling_price_syp
-    } else if (hasUSD) {
-      // USD only mode
-      finalSellingPriceUSD = selling_price_usd
-      finalSellingPriceSYP = finalSellingPriceUSD * exchangeRate
-    } else if (hasSYP) {
-      // SYP only mode - no exchange rate conversion
-      finalSellingPriceSYP = selling_price_syp
-      finalSellingPriceUSD = finalSellingPriceSYP / exchangeRate
+    if (price_type === 'USD') {
+      // USD-based pricing: USD is primary, SYP is derived
+      if (!isNaN(selling_price_usd) && selling_price_usd > 0) {
+        finalSellingPriceUSD = selling_price_usd
+        finalSellingPriceSYP = finalSellingPriceUSD * exchangeRate
+      } else {
+        finalSellingPriceUSD = safeCostPrice * 1.20
+        finalSellingPriceSYP = finalSellingPriceUSD * exchangeRate
+      }
     } else {
-      // Default to USD calculation
-      finalSellingPriceUSD = safeCostPrice * 1.20
-      finalSellingPriceSYP = finalSellingPriceUSD * exchangeRate
+      // SYP-fixed pricing: SYP is primary, USD is derived
+      if (!isNaN(selling_price_syp) && selling_price_syp > 0) {
+        finalSellingPriceSYP = selling_price_syp
+        finalSellingPriceUSD = finalSellingPriceSYP / exchangeRate
+      } else {
+        finalSellingPriceSYP = safeCostPrice * 1.20
+        finalSellingPriceUSD = finalSellingPriceSYP / exchangeRate
+      }
     }
 
     const finalStock = isNaN(current_stock) ? 0 : current_stock
@@ -180,6 +180,7 @@ export async function createProduct(formData: FormData) {
       min_stock_level: finalMinStock,
       is_bulk,
       is_active,
+      price_type: price_type as 'USD' | 'SYP',
       // إضافة تاريخ الصلاحية مع التحقق من عدم فراغه
       expiry_date: expiry_date && expiry_date.trim() !== '' ? expiry_date : null,
     }
@@ -227,7 +228,8 @@ export async function updateProduct(formData: FormData) {
     const min_stock_level = parseInt(formData.get('min_stock_level') as string)
     const is_bulk = formData.get('is_bulk') === 'true'
     const is_active = formData.get('is_active') === 'true'
-    
+    const price_type = (formData.get('price_type') as string) || 'USD'
+
     // استقبال تاريخ الصلاحية عند التعديل
     const expiry_date = formData.get('expiry_date') as string
 
@@ -258,30 +260,29 @@ export async function updateProduct(formData: FormData) {
     const finalMinStock = isNaN(min_stock_level) ? 0 : min_stock_level
 
     const exchangeRate = await getExchangeRate() || 12500
-    
-    // Determine pricing mode based on which selling price is provided
-    const hasUSD = !isNaN(selling_price_usd) && selling_price_usd > 0
-    const hasSYP = !isNaN(selling_price_syp) && selling_price_syp > 0
-    
+
+    // Calculate prices based on price_type
     let finalSellingPriceUSD: number
     let finalSellingPriceSYP: number
 
-    if (hasUSD && hasSYP) {
-      // BOTH mode - use provided prices
-      finalSellingPriceUSD = selling_price_usd
-      finalSellingPriceSYP = selling_price_syp
-    } else if (hasUSD) {
-      // USD only mode
-      finalSellingPriceUSD = selling_price_usd
-      finalSellingPriceSYP = finalSellingPriceUSD * exchangeRate
-    } else if (hasSYP) {
-      // SYP only mode - no exchange rate conversion
-      finalSellingPriceSYP = selling_price_syp
-      finalSellingPriceUSD = finalSellingPriceSYP / exchangeRate
+    if (price_type === 'USD') {
+      // USD-based pricing: USD is primary, SYP is derived
+      if (!isNaN(selling_price_usd) && selling_price_usd > 0) {
+        finalSellingPriceUSD = selling_price_usd
+        finalSellingPriceSYP = finalSellingPriceUSD * exchangeRate
+      } else {
+        finalSellingPriceUSD = safeCostPrice * 1.20
+        finalSellingPriceSYP = finalSellingPriceUSD * exchangeRate
+      }
     } else {
-      // Default to USD calculation
-      finalSellingPriceUSD = safeCostPrice * 1.20
-      finalSellingPriceSYP = finalSellingPriceUSD * exchangeRate
+      // SYP-fixed pricing: SYP is primary, USD is derived
+      if (!isNaN(selling_price_syp) && selling_price_syp > 0) {
+        finalSellingPriceSYP = selling_price_syp
+        finalSellingPriceUSD = finalSellingPriceSYP / exchangeRate
+      } else {
+        finalSellingPriceSYP = safeCostPrice * 1.20
+        finalSellingPriceUSD = finalSellingPriceSYP / exchangeRate
+      }
     }
 
     // Calculate stock difference
@@ -300,6 +301,7 @@ export async function updateProduct(formData: FormData) {
       min_stock_level: finalMinStock,
       is_bulk,
       is_active,
+      price_type: price_type as 'USD' | 'SYP',
       // تحديث تاريخ الصلاحية في قاعدة البيانات
       expiry_date: expiry_date && expiry_date.trim() !== '' ? expiry_date : null,
     }
@@ -396,5 +398,41 @@ export async function getProductByBarcode(barcode: string) {
     return data
   } catch {
     return null
+  }
+}
+
+/**
+ * Search products by barcode or name
+ * Returns multiple results if searching by name, single result if exact barcode match
+ */
+export async function searchProducts(query: string) {
+  try {
+    if (!query || query.trim() === '') return []
+
+    // First try exact barcode match
+    const { data: barcodeMatch, error: barcodeError } = await supabase
+      .from('products')
+      .select('*')
+      .eq('barcode', query.trim())
+      .eq('is_active', true)
+      .single()
+
+    if (!barcodeError && barcodeMatch) {
+      return [barcodeMatch] // Return as array for consistency
+    }
+
+    // If no barcode match, search by name (case-insensitive partial match)
+    const { data: nameMatches, error: nameError } = await supabase
+      .from('products')
+      .select('*')
+      .ilike('name', `%${query.trim()}%`)
+      .eq('is_active', true)
+      .order('name', { ascending: true })
+      .limit(10)
+
+    if (nameError) return []
+    return nameMatches ?? []
+  } catch {
+    return []
   }
 }

@@ -25,6 +25,7 @@ CREATE TABLE products (
   expiry_date DATE,
   is_bulk BOOLEAN NOT NULL DEFAULT false,
   is_active BOOLEAN NOT NULL DEFAULT true,
+  price_type VARCHAR(10) NOT NULL DEFAULT 'USD',
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -32,6 +33,10 @@ CREATE TABLE products (
 -- Index for barcode
 CREATE INDEX idx_products_barcode ON products(barcode);
 CREATE INDEX idx_products_category_id ON products(category_id);
+
+-- Add CHECK constraint for price_type
+ALTER TABLE products
+ADD CONSTRAINT chk_price_type CHECK (price_type IN ('USD', 'SYP'));
 
 -- Suppliers table
 CREATE TABLE suppliers (
@@ -163,28 +168,34 @@ CREATE TRIGGER update_settings_updated_at BEFORE UPDATE ON settings
 CREATE OR REPLACE FUNCTION auto_calculate_selling_prices()
 RETURNS TRIGGER AS $$
 BEGIN
-  -- Auto-calculate selling_price_usd with 20% profit margin
-  NEW.selling_price_usd = NEW.cost_price * 1.20;
-  
-  -- Auto-calculate selling_price_syp using exchange rate from settings
-  -- Default to 12500 if exchange rate not found
+  -- Auto-calculate selling prices with 20% profit margin based on price_type
   DECLARE exchange_rate_value DECIMAL(10, 2);
   BEGIN
     SELECT CAST(value AS DECIMAL(10, 2)) INTO exchange_rate_value
     FROM settings
     WHERE key = 'exchange_rate'
     LIMIT 1;
-    
+
     IF exchange_rate_value IS NULL OR exchange_rate_value = 0 THEN
       exchange_rate_value := 12500;
     END IF;
-    
-    NEW.selling_price_syp = NEW.selling_price_usd * exchange_rate_value;
+
+    -- Calculate based on price_type
+    IF NEW.price_type = 'USD' THEN
+      -- USD-based: calculate USD first, then derive SYP
+      NEW.selling_price_usd = NEW.cost_price * 1.20;
+      NEW.selling_price_syp = NEW.selling_price_usd * exchange_rate_value;
+    ELSE
+      -- SYP-fixed: calculate SYP first, then derive USD
+      NEW.selling_price_syp = NEW.cost_price * 1.20;
+      NEW.selling_price_usd = NEW.selling_price_syp / exchange_rate_value;
+    END IF;
   EXCEPTION WHEN OTHERS THEN
-    -- Fallback to default exchange rate if query fails
+    -- Fallback to USD-based calculation if query fails
+    NEW.selling_price_usd = NEW.cost_price * 1.20;
     NEW.selling_price_syp = NEW.selling_price_usd * 12500;
   END;
-  
+
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
@@ -199,8 +210,15 @@ CREATE TRIGGER trigger_auto_calculate_prices
 CREATE OR REPLACE FUNCTION update_all_product_prices(new_rate DECIMAL)
 RETURNS VOID AS $$
 BEGIN
-  -- Update selling_price_syp for all products using the new exchange rate
+  -- Update selling_price_syp for USD-based products only
+  -- SYP-fixed products keep their SYP price constant
   UPDATE products
-  SET selling_price_syp = selling_price_usd * new_rate;
+  SET selling_price_syp = selling_price_usd * new_rate
+  WHERE price_type = 'USD';
+
+  -- Update selling_price_usd for SYP-fixed products (their USD equivalent changes)
+  UPDATE products
+  SET selling_price_usd = selling_price_syp / new_rate
+  WHERE price_type = 'SYP';
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;

@@ -17,6 +17,7 @@ interface Product {
   current_stock: number
   is_bulk: boolean
   is_active: boolean
+  price_type: 'USD' | 'SYP'
 }
 
 interface Customer {
@@ -45,8 +46,10 @@ export default function SalesManager({ initialProducts }: SalesManagerProps) {
   const [weightInput, setWeightInput] = useState('')
   const [isAddingToCart, setIsAddingToCart] = useState(false)
   const weightInputRef = useRef<HTMLInputElement>(null)
+  const previousExchangeRateRef = useRef<number>(12500)
+  const barcodeInputRef = useRef<HTMLInputElement>(null)
 
-  const { items, addItem, removeItem, updateQuantity, updateItemPrice, clearCart, getTotalUSD, getTotalSYP, getTotalItems } = useCartStore()
+  const { items, addItem, removeItem, updateQuantity, updateItemPrice, recalculateAllSYPPrices, clearCart, getTotalUSD, getTotalSYP, getTotalItems } = useCartStore()
 
   // Fetch customers and exchange rate on mount
   useEffect(() => {
@@ -68,14 +71,43 @@ export default function SalesManager({ initialProducts }: SalesManagerProps) {
         const response = await fetch('/api/settings/exchange-rate')
         if (response.ok) {
           const data = await response.json()
-          setExchangeRate(data.rate || 12500)
+          const newRate = data.rate || 12500
+          setExchangeRate(newRate)
         }
       } catch (error) {
         console.error('Failed to fetch exchange rate:', error)
       }
     }
     fetchExchangeRate()
+
+    // Poll for exchange rate changes every 30 seconds
+    const intervalId = setInterval(fetchExchangeRate, 30000)
+
+    return () => clearInterval(intervalId)
   }, [])
+
+  // Recalculate SYP prices when exchange rate changes
+  useEffect(() => {
+    if (previousExchangeRateRef.current !== exchangeRate) {
+      console.log('Exchange rate changed from', previousExchangeRateRef.current, 'to', exchangeRate)
+      recalculateAllSYPPrices(exchangeRate)
+      previousExchangeRateRef.current = exchangeRate
+    }
+  }, [exchangeRate, recalculateAllSYPPrices])
+
+  // Auto-focus barcode input on mount
+  useEffect(() => {
+    barcodeInputRef.current?.focus()
+  }, [])
+
+  // Auto-focus barcode input after weight popover closes
+  useEffect(() => {
+    if (!showWeightPopover) {
+      barcodeInputRef.current?.focus()
+      setSearchQuery('')
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showWeightPopover])
 
   const filteredProducts = products.filter(
     (product) =>
@@ -89,7 +121,7 @@ export default function SalesManager({ initialProducts }: SalesManagerProps) {
     if (product.is_bulk) {
       setSelectedBulkProduct(product)
       setShowWeightPopover(true)
-      setWeightInput('0.5') // Set reasonable default weight
+      setWeightInput('') // Clear to allow flexible input
       return
     }
 
@@ -104,16 +136,27 @@ export default function SalesManager({ initialProducts }: SalesManagerProps) {
       return
     }
 
-    // Calculate SYP price for the item
-    const sellingPriceSYP = product.selling_price_syp || (product.selling_price_usd * exchangeRate)
+    // Calculate SYP price for the item dynamically based on price_type
+    let sellingPriceSYP: number
+    let sellingPriceUSD: number
+    if (product.price_type === 'USD') {
+      // USD-based: SYP = USD * exchangeRate
+      sellingPriceUSD = product.selling_price_usd
+      sellingPriceSYP = Math.round(product.selling_price_usd * exchangeRate)
+    } else {
+      // SYP-fixed: Use the stored SYP price (it stays constant), calculate USD from it
+      sellingPriceSYP = Math.round(product.selling_price_syp)
+      sellingPriceUSD = sellingPriceSYP / exchangeRate
+    }
 
     addItem({
       productId: product.id,
       barcode: product.barcode,
       name: product.name,
-      sellingPriceUSD: product.selling_price_usd,
+      sellingPriceUSD: sellingPriceUSD,
       sellingPriceSYP: sellingPriceSYP,
       currentStock: availableStock,
+      priceType: product.price_type,
     })
     setError('')
   }
@@ -162,8 +205,18 @@ export default function SalesManager({ initialProducts }: SalesManagerProps) {
       return
     }
 
-    // Calculate SYP price for the item
-    const sellingPriceSYP = selectedBulkProduct.selling_price_syp || (selectedBulkProduct.selling_price_usd * exchangeRate)
+    // Calculate SYP price for the item dynamically based on price_type
+    let sellingPriceSYP: number
+    let sellingPriceUSD: number
+    if (selectedBulkProduct.price_type === 'USD') {
+      // USD-based: SYP = USD * exchangeRate
+      sellingPriceUSD = selectedBulkProduct.selling_price_usd
+      sellingPriceSYP = Math.round(selectedBulkProduct.selling_price_usd * exchangeRate)
+    } else {
+      // SYP-fixed: Use the stored SYP price (it stays constant), calculate USD from it
+      sellingPriceSYP = Math.round(selectedBulkProduct.selling_price_syp)
+      sellingPriceUSD = sellingPriceSYP / exchangeRate
+    }
 
     // Log the final weight to verify correct parsing
     console.log('Adding bulk item to cart with weight:', finalWeight, 'kg')
@@ -174,9 +227,10 @@ export default function SalesManager({ initialProducts }: SalesManagerProps) {
       productId: selectedBulkProduct.id,
       barcode: selectedBulkProduct.barcode,
       name: selectedBulkProduct.name,
-      sellingPriceUSD: selectedBulkProduct.selling_price_usd,
+      sellingPriceUSD: sellingPriceUSD,
       sellingPriceSYP: sellingPriceSYP,
       currentStock: availableStock,
+      priceType: selectedBulkProduct.price_type,
     }, finalWeight)
 
     // Ensure state is updated before closing popover
@@ -194,6 +248,87 @@ export default function SalesManager({ initialProducts }: SalesManagerProps) {
     setSelectedBulkProduct(null)
     setWeightInput('')
     setError('') // Clear any error state when canceling
+    setSearchQuery('') // Clear barcode input when canceling
+  }
+
+  const handleBarcodeScan = (barcode: string) => {
+    const product = products.find(p => p.barcode === barcode)
+
+    if (!product) {
+      setError(`المنتج بالباركود ${barcode} غير موجود`)
+      setTimeout(() => setError(''), 3000)
+      return
+    }
+
+    if (!product.is_active) {
+      setError(`المنتج ${product.name} غير نشط`)
+      setTimeout(() => setError(''), 3000)
+      return
+    }
+
+    // Check if it's a bulk item
+    if (product.is_bulk) {
+      setSelectedBulkProduct(product)
+      setShowWeightPopover(true)
+      setWeightInput('') // Clear to allow flexible input
+      // Focus on weight input after a short delay
+      setTimeout(() => {
+        weightInputRef.current?.focus()
+      }, 100)
+    } else {
+      // Regular item - add to cart or increment quantity
+      const cartItem = items.find((i) => i.productId === product.id)
+      const availableStock = product.current_stock || 0
+      const currentQty = cartItem ? cartItem.quantity : 0
+
+      if (currentQty >= availableStock) {
+        setError(`المخزون غير كافٍ. المتاح: ${availableStock}`)
+        setTimeout(() => setError(''), 3000)
+        return
+      }
+
+      // Calculate prices based on price_type
+      let sellingPriceSYP: number
+      let sellingPriceUSD: number
+      if (product.price_type === 'USD') {
+        sellingPriceUSD = product.selling_price_usd
+        sellingPriceSYP = Math.round(product.selling_price_usd * exchangeRate)
+      } else {
+        sellingPriceSYP = Math.round(product.selling_price_syp)
+        sellingPriceUSD = sellingPriceSYP / exchangeRate
+      }
+
+      if (cartItem) {
+        // Increment quantity for existing item
+        updateQuantity(product.id, currentQty + 1)
+      } else {
+        // Add new item to cart
+        addItem({
+          productId: product.id,
+          barcode: product.barcode,
+          name: product.name,
+          sellingPriceUSD: sellingPriceUSD,
+          sellingPriceSYP: sellingPriceSYP,
+          currentStock: availableStock,
+          priceType: product.price_type,
+        })
+      }
+
+      setError('')
+    }
+
+    // Clear the barcode input
+    setSearchQuery('')
+  }
+
+  const handleBarcodeKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      const barcode = (e.target as HTMLInputElement).value.trim()
+      if (barcode) {
+        handleBarcodeScan(barcode)
+      }
+    }
   }
 
   const handleCheckout = async () => {
@@ -236,9 +371,12 @@ export default function SalesManager({ initialProducts }: SalesManagerProps) {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2">
           <input
+            ref={barcodeInputRef}
             className="w-full p-2 border rounded"
-            placeholder="ابحث عن منتج..."
+            placeholder="ابحث عن منتج أو امسح الباركود..."
+            value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
+            onKeyDown={handleBarcodeKeyDown}
           />
           <div className="grid grid-cols-2 gap-4 mt-4">
             {filteredProducts.map((p) => (
@@ -247,10 +385,12 @@ export default function SalesManager({ initialProducts }: SalesManagerProps) {
                 <p>المخزون: {p.current_stock} {p.is_bulk ? 'kg' : ''}</p>
                 {p.is_bulk && <span className="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded">بيع بالوزن</span>}
                 <p className="text-blue-600 font-semibold">
-                  ${p.selling_price_usd.toFixed(2)}
+                  ${p.price_type === 'USD' ? p.selling_price_usd.toFixed(2) : (p.selling_price_syp / exchangeRate).toFixed(2)}
                 </p>
                 <p className="text-indigo-600 font-semibold">
-                  {p.selling_price_syp.toLocaleString('en-US')} SYP
+                  {p.price_type === 'USD'
+                    ? Math.round(p.selling_price_usd * exchangeRate).toLocaleString('en-US')
+                    : Math.round(p.selling_price_syp).toLocaleString('en-US')} SYP
                 </p>
               </div>
             ))}
@@ -285,7 +425,7 @@ export default function SalesManager({ initialProducts }: SalesManagerProps) {
                   value={weightInput}
                   onChange={(e) => setWeightInput(e.target.value)}
                   className="flex-1 p-2 border rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-100"
-                  placeholder="0.5"
+                  placeholder="أدخل الوزن (مثال: 0.25, 1.5, 4)"
                   autoFocus
                   disabled={isAddingToCart}
                   onKeyDown={(e) => {
@@ -308,10 +448,37 @@ export default function SalesManager({ initialProducts }: SalesManagerProps) {
                   )}
                 </button>
               </div>
-              
-              {/* Quick weight buttons */}
+
+              {/* Display calculated total price */}
+              {(() => {
+                if (!weightInput || !selectedBulkProduct) return null
+                const normalizedWeight = normalizeNumberInput(weightInput)
+                const displayWeight = !isNaN(normalizedWeight) ? normalizedWeight : (parseFloat(weightInput) || 0)
+                return (
+                  <div className="mb-3 p-2 bg-slate-50 rounded text-xs">
+                    <div className="text-slate-600 mb-1">السعر الكلي:</div>
+                    {selectedBulkProduct.price_type === 'USD' ? (
+                      <div className="font-semibold text-slate-900">
+                        ${(selectedBulkProduct.selling_price_usd * displayWeight).toFixed(2)}
+                        <span className="text-indigo-600 ml-2">
+                          ({Math.round(selectedBulkProduct.selling_price_usd * displayWeight * exchangeRate).toLocaleString()} SYP)
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="font-semibold text-slate-900">
+                        {Math.round(selectedBulkProduct.selling_price_syp * displayWeight).toLocaleString()} SYP
+                        <span className="text-blue-600 ml-2">
+                          (${(selectedBulkProduct.selling_price_syp * displayWeight / exchangeRate).toFixed(2)})
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )
+              })()}
+
+              {/* Quick weight buttons - more flexible options */}
               <div className="flex gap-1 flex-wrap">
-                {[0.5, 1, 1.5, 2].map((weight) => (
+                {[0.1, 0.25, 0.5, 0.75, 1, 1.5, 2, 3, 5].map((weight) => (
                   <button
                     key={weight}
                     onClick={async () => {

@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from 'react'
 import { getReportMetrics, getTopSellingProducts, DateRange } from '@/app/actions/reports'
-import { formatCurrency } from '@/lib/pricing'
-import { TrendingUp, DollarSign, Package, ShoppingCart, BarChart3, Lock, X } from 'lucide-react'
+import { formatCurrency, formatDualCurrency, getExchangeRate, usdToSyp } from '@/lib/pricing'
+import { TrendingUp, DollarSign, Package, ShoppingCart, BarChart3, Lock, X, CreditCard, Wallet } from 'lucide-react'
 
 export default function ReportsPage() {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
@@ -15,9 +15,14 @@ export default function ReportsPage() {
     netProfit: 0,
     totalSales: 0,
     totalItemsSold: 0,
+    cashSales: 0,
+    creditSales: 0,
+    cashRevenue: 0,
+    creditRevenue: 0,
   })
   const [topProducts, setTopProducts] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [exchangeRate, setExchangeRate] = useState<number>(12500)
   const [dateRange, setDateRange] = useState<DateRange>({
     startDate: '',
     endDate: '',
@@ -44,6 +49,17 @@ export default function ReportsPage() {
       startDate: startDate.toISOString().split('T')[0],
       endDate: endDate.toISOString().split('T')[0],
     })
+
+    // Fetch exchange rate
+    const fetchExchangeRate = async () => {
+      try {
+        const rate = await getExchangeRate()
+        setExchangeRate(rate)
+      } catch (error) {
+        console.error('Failed to fetch exchange rate:', error)
+      }
+    }
+    fetchExchangeRate()
   }, [])
 
   useEffect(() => {
@@ -167,6 +183,7 @@ export default function ReportsPage() {
                   </div>
                   <h3 className="text-sm font-medium text-slate-400 mb-1">إجمالي الإيرادات</h3>
                   <p className="text-2xl font-bold text-white">{formatCurrency(metrics.totalRevenue, 'USD')}</p>
+                  <p className="text-sm text-slate-400 mt-1">{formatCurrency(usdToSyp(metrics.totalRevenue, exchangeRate), 'SYP')}</p>
                 </div>
 
                 {/* Total Cost */}
@@ -178,6 +195,7 @@ export default function ReportsPage() {
                   </div>
                   <h3 className="text-sm font-medium text-slate-400 mb-1">إجمالي التكلفة</h3>
                   <p className="text-2xl font-bold text-white">{formatCurrency(metrics.totalCost, 'USD')}</p>
+                  <p className="text-sm text-slate-400 mt-1">{formatCurrency(usdToSyp(metrics.totalCost, exchangeRate), 'SYP')}</p>
                 </div>
 
                 {/* Net Profit */}
@@ -190,6 +208,9 @@ export default function ReportsPage() {
                   <h3 className="text-sm font-medium text-slate-400 mb-1">صافي الربح</h3>
                   <p className={`text-2xl font-bold ${metrics.netProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                     {formatCurrency(metrics.netProfit, 'USD')}
+                  </p>
+                  <p className={`text-sm text-slate-400 mt-1 ${metrics.netProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {formatCurrency(usdToSyp(metrics.netProfit, exchangeRate), 'SYP')}
                   </p>
                 </div>
 
@@ -206,6 +227,45 @@ export default function ReportsPage() {
                 </div>
               </div>
 
+              {/* Payment Method Breakdown */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Cash Sales */}
+                <div className="bg-gradient-to-br from-green-900 to-green-800 rounded-lg shadow-lg p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="p-3 bg-green-500/20 rounded-lg">
+                      <Wallet className="h-6 w-6 text-green-400" />
+                    </div>
+                    <span className="text-xs font-medium text-green-300 bg-green-500/20 px-3 py-1 rounded-full">
+                      نقدي
+                    </span>
+                  </div>
+                  <h3 className="text-sm font-medium text-green-300 mb-1">المبيعات النقدية</h3>
+                  <p className="text-2xl font-bold text-white">{formatCurrency(metrics.cashRevenue, 'USD')}</p>
+                  <p className="text-sm text-green-300 mt-1">{formatCurrency(usdToSyp(metrics.cashRevenue, exchangeRate), 'SYP')}</p>
+                  <div className="mt-3 pt-3 border-t border-green-700">
+                    <p className="text-xs text-green-300">{metrics.cashSales} عملية بيع</p>
+                  </div>
+                </div>
+
+                {/* Credit Sales */}
+                <div className="bg-gradient-to-br from-blue-900 to-blue-800 rounded-lg shadow-lg p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="p-3 bg-blue-500/20 rounded-lg">
+                      <CreditCard className="h-6 w-6 text-blue-400" />
+                    </div>
+                    <span className="text-xs font-medium text-blue-300 bg-blue-500/20 px-3 py-1 rounded-full">
+                      آجل
+                    </span>
+                  </div>
+                  <h3 className="text-sm font-medium text-blue-300 mb-1">المبيعات الآجلة</h3>
+                  <p className="text-2xl font-bold text-white">{formatCurrency(metrics.creditRevenue, 'USD')}</p>
+                  <p className="text-sm text-blue-300 mt-1">{formatCurrency(usdToSyp(metrics.creditRevenue, exchangeRate), 'SYP')}</p>
+                  <div className="mt-3 pt-3 border-t border-blue-700">
+                    <p className="text-xs text-blue-300">{metrics.creditSales} عملية بيع</p>
+                  </div>
+                </div>
+              </div>
+
               {/* Top Selling Products */}
               <div className="bg-slate-900 rounded-lg shadow-lg p-6">
                 <div className="flex items-center gap-2 mb-6">
@@ -219,20 +279,21 @@ export default function ReportsPage() {
                     {topProducts.map((product, index) => (
                       <div
                         key={product.id}
-                        className="flex items-center justify-between p-4 bg-slate-800 rounded-lg"
+                        className="flex items-center justify-between p-4 bg-slate-800 rounded-lg hover:bg-slate-700 transition-colors"
                       >
-                        <div className="flex items-center gap-4">
-                          <div className="w-8 h-8 bg-blue-500/20 rounded-full flex items-center justify-center">
+                        <div className="flex items-center gap-4 flex-1">
+                          <div className="w-8 h-8 bg-blue-500/20 rounded-full flex items-center justify-center flex-shrink-0">
                             <span className="text-sm font-bold text-blue-400">{index + 1}</span>
                           </div>
-                          <div>
-                            <h4 className="font-medium text-white">{product.name}</h4>
-                            <p className="text-sm text-slate-400">{product.barcode}</p>
+                          <div className="min-w-0 flex-1">
+                            <h4 className="font-medium text-white truncate">{product.name}</h4>
+                            <p className="text-sm text-slate-400 truncate">{product.barcode}</p>
                           </div>
                         </div>
-                        <div className="text-left">
+                        <div className="text-right mr-4 flex-shrink-0">
                           <p className="font-bold text-white">{formatCurrency(product.totalRevenue, 'USD')}</p>
-                          <p className="text-sm text-slate-400">{product.totalQuantity} قطعة</p>
+                          <p className="text-sm text-slate-400">{formatCurrency(usdToSyp(product.totalRevenue, exchangeRate), 'SYP')}</p>
+                          <p className="text-xs text-slate-500 mt-1">{product.totalQuantity} قطعة</p>
                         </div>
                       </div>
                     ))}

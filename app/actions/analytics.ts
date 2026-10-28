@@ -3,6 +3,8 @@
 import { supabase } from '@/lib/supabaseClient'
 import { getDailySalesAmount, getMonthlyPurchasesAmount, getSalesTrendFromLogs } from './stats'
 import { getDailyExpenses, getMonthlyExpenses } from './expenses'
+import { updateStockAtomically } from './products'
+import { revalidatePath } from 'next/cache'
 
 export async function getTodaySales() {
   return await getDailySalesAmount()
@@ -309,5 +311,50 @@ export async function getDashboardStats() {
     monthExpenses,
     todayNetProfit,
     monthNetProfit,
+  }
+}
+
+/**
+ * Dispose of expired product by setting stock to 0 and logging the disposal
+ * @param productId - The ID of the product to dispose
+ * @param productName - The name of the product (for logging)
+ * @param quantity - The quantity being disposed
+ * @returns Success or error
+ */
+export async function disposeExpiredProduct(productId: string, productName: string, quantity: number) {
+  try {
+    // Get current stock
+    const { data: product, error: productError } = await supabase
+      .from('products')
+      .select('current_stock')
+      .eq('id', productId)
+      .single()
+
+    if (productError || !product) {
+      return { error: 'Product not found' }
+    }
+
+    const currentStock = product.current_stock || 0
+
+    // Set stock to 0
+    const stockResult = await updateStockAtomically(
+      productId,
+      0,
+      'disposal',
+      `Expired product disposal: ${productName} - ${quantity} units disposed`
+    )
+
+    if (stockResult.error) {
+      return { error: stockResult.error }
+    }
+
+    revalidatePath('/dashboard/reports/expiry')
+    revalidatePath('/dashboard/products')
+    revalidatePath('/dashboard')
+
+    return { success: true }
+  } catch (error) {
+    console.error('[DISPOSAL] Error disposing product:', error)
+    return { error: 'Failed to dispose product' }
   }
 }

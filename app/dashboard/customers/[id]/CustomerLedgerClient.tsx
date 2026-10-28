@@ -406,9 +406,9 @@ export default function CustomerLedgerClient({
               <p className="text-slate-600 mb-4">
                 هل أنت متأكد من أنك تريد حذف العميل "{customer.name}"؟
               </p>
-              
-              <p className="text-sm text-slate-500 mb-4">
-                هذا الإجراء سيقوم بتعطيل العميل. إذا كان للعميل رصيد أو سجل معاملات، فلن يتم الحذف.
+
+              <p className="text-sm text-red-600 mb-4 font-medium">
+                ⚠️ تحذير: سيتم حذف العميل وجميع سجلات المعاملات والديون المرتبطة به نهائياً. هذا الإجراء لا يمكن التراجع عنه.
               </p>
 
               {deleteError && (
@@ -431,15 +431,14 @@ export default function CustomerLedgerClient({
                   onClick={async () => {
                     try {
                       await handleDeleteCustomer()
-                      setShowDeleteModal(false)
-                      setDeleteError('')
+                      // Deletion successful - page will redirect via server action
                     } catch (error) {
                       setDeleteError(error instanceof Error ? error.message : 'Failed to delete customer')
                     }
                   }}
                   className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
                 >
-                  تأكيد الحذف
+                  حذف نهائي
                 </button>
               </div>
             </div>

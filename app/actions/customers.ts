@@ -161,6 +161,17 @@ export async function deleteCustomer(id: string, force: boolean = false) {
         return { error: 'Failed to delete customer ledger entries' }
       }
 
+      // Delete debt payments associated with this customer
+      const { error: debtPaymentsDeleteError } = await supabase
+        .from('debt_payments')
+        .delete()
+        .eq('customer_id', id)
+
+      if (debtPaymentsDeleteError) {
+        console.error('[DELETE CUSTOMER] Error deleting debt payments:', debtPaymentsDeleteError)
+        // Don't return error - debt_payments might not exist or be optional
+      }
+
       // Note: We don't delete sales as they are important business records
       // We just nullify the customer_id in sales
       const { error: salesUpdateError } = await supabase
